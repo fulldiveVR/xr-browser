@@ -333,7 +333,7 @@ ExternalVR::SetEyeTransform(const device::Eye aEye, const vrb::Matrix& aTransfor
   mozilla::gfx::VRDisplayState::Eye which = (aEye == device::Eye::Right
                                              ? mozilla::gfx::VRDisplayState::Eye_Right
                                              : mozilla::gfx::VRDisplayState::Eye_Left);
-  memcpy(&(m.system.displayState.eyeTransform[which]), aTransform.Data(), sizeof(m.system.displayState.eyeTransform[which]));
+  //memcpy(&(m.system.displayState.eyeTransform[which]), aTransform.Data(), sizeof(m.system.displayState.eyeTransform[which]));
   m.eyeTransforms[device::EyeIndex(aEye)] = aTransform;
 }
 
