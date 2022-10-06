@@ -4,13 +4,13 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.htc.vr</groupId>
   <artifactId>wvr_permission_client</artifactId>
-  <version>4.5.0-u02</version>
+  <version>5.0.2-u16</version>
   <packaging>aar</packaging>
   <dependencies>
     <dependency>
       <groupId>com.htc.vr.common</groupId>
       <artifactId>wvr.common.utils</artifactId>
-      <version>4.5.0-u02</version>
+      <version>5.0.2-u16</version>
       <scope>runtime</scope>
     </dependency>
   </dependencies>

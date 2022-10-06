@@ -24,8 +24,6 @@
 #include "vrb/Group.h"
 #include "vrb/TextureGL.h"
 #include "../../main/cpp/DeviceDelegate.h"
-#include "../../../../third_party/wavesdk/build/wvr_client-4.5.0-u02/include/wvr/wvr_events.h"
-
 #include <array>
 #include <vector>
 #include <mutex>

@@ -3,15 +3,15 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.htc.vr</groupId>
-  <artifactId>wvr_client</artifactId>
-  <version>4.5.0-u02</version>
+  <artifactId>wvr_ime_client</artifactId>
+  <version>5.0.2-u16</version>
   <packaging>aar</packaging>
   <dependencies>
     <dependency>
-      <groupId>com.htc.vr</groupId>
-      <artifactId>vr.client.abi</artifactId>
-      <version>4.5.0-u02</version>
-      <scope>runtime</scope>
+      <groupId>com.htc.vr.common</groupId>
+      <artifactId>wvr.common.utils</artifactId>
+      <version>5.0.2-u16</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 </project>
