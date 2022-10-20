@@ -467,6 +467,79 @@ bool OpenXRInputSource::GetHandTrackingInfo(const XrFrameState& frameState, XrSp
     return mHasHandJoints && mHasAimState;
 }
 
+void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode, ControllerDelegate& delegate)
+{
+    if ((mAimState.status & XR_HAND_TRACKING_AIM_SYSTEM_GESTURE_BIT_FB) != 0) {
+        delegate.SetEnabled(mIndex, false);
+        return;
+    }
+
+    XrSpaceLocation poseLocation { XR_TYPE_SPACE_LOCATION };
+    poseLocation.pose = mAimState.aimPose;
+
+    delegate.SetEnabled(mIndex, true);
+
+    device::CapabilityFlags flags = device::Orientation;
+    vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);
+
+    if (renderMode == device::RenderMode::StandAlone) {
+        pointerTransform.TranslateInPlace(kAverageHeight);
+    }
+    flags |= device::Position;
+
+    float correctionAngle;
+    if (mHandeness == OpenXRHandFlags::Left)
+        correctionAngle = M_PI_2;
+    else
+        correctionAngle = M_PI_4 * 3/2;
+    auto correctionMatrix = vrb::Matrix::Rotation(vrb::Vector(0.0, 0.0, 1.0), correctionAngle);
+
+    vrb::Matrix correctedTransform = pointerTransform.PostMultiply(correctionMatrix);
+    delegate.SetTransform(mIndex, correctedTransform);
+
+    delegate.SetImmersiveBeamTransform(mIndex, correctedTransform);
+    flags |= device::GripSpacePosition;
+    delegate.SetBeamTransform(mIndex, vrb::Matrix::Identity());
+
+    delegate.SetCapabilityFlags(mIndex, flags);
+
+    delegate.SetModelVisible(mIndex, false);
+
+    // Select action
+    bool indexPinching = (mAimState.status & XR_HAND_TRACKING_AIM_INDEX_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_TRIGGER,
+                            device::kImmersiveButtonTrigger, indexPinching, indexPinching, 1.0);
+
+    if (renderMode == device::RenderMode::Immersive && indexPinching != selectActionStarted) {
+        selectActionStarted = indexPinching;
+        if (selectActionStarted) {
+            delegate.SetSelectActionStart(mIndex);
+        } else {
+            delegate.SetSelectActionStop(mIndex);
+        }
+    }
+
+    // Squeeze action
+    bool middlePinching = (mAimState.status & XR_HAND_TRACKING_AIM_MIDDLE_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_SQUEEZE,
+                            device::kImmersiveButtonSqueeze, middlePinching, middlePinching, 1.0);
+
+    if (renderMode == device::RenderMode::Immersive && middlePinching != squeezeActionStarted) {
+        squeezeActionStarted = middlePinching;
+        if (squeezeActionStarted) {
+            delegate.SetSqueezeActionStart(mIndex);
+        } else {
+            delegate.SetSqueezeActionStop(mIndex);
+        }
+    }
+
+    // Menu button
+    bool ringPinching = (mAimState.status & XR_HAND_TRACKING_AIM_RING_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_APP,
+                            device::kImmersiveButtonThumbrest, ringPinching, ringPinching, 1.0);
+
+}
+
 void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, float offsetY, device::RenderMode renderMode, ControllerDelegate& delegate)
 {
     if (!mActiveMapping) {
@@ -491,6 +564,12 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
       CHECK_XRCMD(CreateActionSpace(mPointerAction, mPointerSpace));
     }
 
+    // If hand tracking is active, use it to emulate the controller.
+    if (GetHandTrackingInfo(frameState, localSpace)) {
+        EmulateControllerFromHand(renderMode, delegate);
+        return;
+    }
+
     // Pose transforms.
     bool isPoseActive { false };
     XrSpaceLocation poseLocation { XR_TYPE_SPACE_LOCATION };
@@ -508,6 +587,7 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
     poseLocation.pose.position.y += offsetY;
 
     delegate.SetEnabled(mIndex, true);
+    delegate.SetModelVisible(mIndex, true);
 
     device::CapabilityFlags flags = device::Orientation;
     vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);
