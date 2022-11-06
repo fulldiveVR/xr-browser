@@ -876,6 +876,7 @@ BrowserWorld::InitializeJava(JNIEnv* aEnv, jobject& aActivity, jobject& aAssetMa
   VRBrowser::InitializeJava(m.env, m.activity);
   GeckoSurfaceTexture::InitializeJava(m.env, m.activity);
   m.loader->InitializeJava(aEnv, aActivity, aAssetManager);
+  VRBrowser::RegisterExternalContext((jlong)m.externalVR->GetSharedData());
   VRBrowser::SetDeviceType(m.device->GetDeviceType());
 
   if (!m.modelsLoaded) {
@@ -1496,7 +1497,7 @@ BrowserWorld::Create() {
   result->m.context->GetSurfaceTextureFactory()->AddGlobalObserver(result->m.surfaceObserver);
   // This must be initialized before using Gecko. Gecko could fail to detect XR runtimes if
   // we try to load some URL before setting the external context for example.
-  VRBrowser::RegisterExternalContext((jlong)result->m.externalVR->GetSharedData());
+//  VRBrowser::RegisterExternalContext((jlong)result->m.externalVR->GetSharedData());
   return result;
 }
 
