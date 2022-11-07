@@ -672,7 +672,7 @@
     <string name="crash_dialog_heading">我们遇到了问题并且崩溃了</string>
     <!-- This string explains why Mozilla would like the user to allow the crash data to be uploaded.
          '%1$s' will be replaced at runtime with the app's domain name. -->
-    <string name="crash_dialog_message"><![CDATA[希望您发送崩溃数据，以帮助 Mozilla 改进 %1$s。]]></string>
+    <string name="crash_dialog_message"><![CDATA[希望您发送崩溃数据，以帮助 VIVPORT 改进 %1$s。]]></string>
     <!-- This string labels a checkbox in the crash dialog box. When checked, the user will no longer
          be prompted for permission to upload crash data after an application crash. -->
     <string name="crash_dialog_send_data">不再询问，始终发送数据</string>

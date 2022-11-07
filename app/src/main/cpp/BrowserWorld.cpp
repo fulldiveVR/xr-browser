@@ -553,6 +553,8 @@ BrowserWorld::State::UpdateControllers(bool& aRelayoutWidgets) {
         controller.scrollDeltaY = 0.0f;
       } else {
         controller.scrollStart = -1.0;
+        controller.scrollDeltaX = 0.0f;
+        controller.scrollDeltaY = 0.0f;
       }
       if (!pressed) {
         if (controller.touched) {
@@ -621,6 +623,8 @@ BrowserWorld::State::ClearWebXRControllerData() {
         controller.selectActionStopFrameId = 0;
         controller.squeezeActionStartFrameId = 0;
         controller.squeezeActionStopFrameId = 0;
+        controller.scrollDeltaX = 0.0;
+        controller.scrollDeltaY = 0.0;
         for (int i = 0; i < controller.numAxes; ++i) {
             controller.immersiveAxes[i] = 0;
         }

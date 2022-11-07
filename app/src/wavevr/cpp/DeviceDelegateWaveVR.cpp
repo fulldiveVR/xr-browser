@@ -40,6 +40,11 @@
 
 namespace crow {
 
+#define SCALE_FACTOR_VIEWPORT 1.0f
+#define SCALE_FACTOR_IMMERSIVE 1.0f
+#define SCALE_FACTOR_TEXTURE 1.0f
+#define SCALE_FACTOR_NATIVE 1.0f
+
 static const vrb::Vector kAverageHeight(0.0f, 1.7f, 0.0f);
 static const int32_t kMaxControllerCount = 2;
 static const int32_t kRecenterDelay = 72;
@@ -230,14 +235,15 @@ struct DeviceDelegateWaveVR::State {
 
   void InitializeRender() {
     WVR_GetRenderTargetSize(&renderWidth, &renderHeight);
-    VRB_GL_CHECK(glViewport(0, 0, renderWidth, renderHeight));
+    VRB_GL_CHECK(glViewport(0, 0, renderWidth*SCALE_FACTOR_VIEWPORT, renderHeight*SCALE_FACTOR_VIEWPORT));
     VRB_DEBUG("Recommended size is %ux%u", renderWidth, renderHeight);
     if (renderWidth == 0 || renderHeight == 0) {
       VRB_ERROR("Please check Wave server configuration");
       return;
     }
     if (immersiveDisplay) {
-      immersiveDisplay->SetEyeResolution(renderWidth, renderHeight);
+      immersiveDisplay->SetEyeResolution(renderWidth*SCALE_FACTOR_IMMERSIVE, renderHeight*SCALE_FACTOR_IMMERSIVE);
+      immersiveDisplay->SetNativeFramebufferScaleFactor(SCALE_FACTOR_NATIVE);
     }
     InitializeTextureQueues();
   }
@@ -245,9 +251,9 @@ struct DeviceDelegateWaveVR::State {
   void InitializeTextureQueues() {
     ReleaseTextureQueues();
     VRB_LOG("Create texture queues: %dx%d", renderWidth, renderHeight);
-    leftTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth, renderHeight, 0);
+    leftTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth*SCALE_FACTOR_TEXTURE, renderHeight*SCALE_FACTOR_TEXTURE, 0);
     FillFBOQueue(leftTextureQueue, leftFBOQueue);
-    rightTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth, renderHeight, 0);
+    rightTextureQueue = WVR_ObtainTextureQueue(WVR_TextureTarget_2D, WVR_TextureFormat_RGBA, WVR_TextureType_UnsignedByte, renderWidth*SCALE_FACTOR_TEXTURE, renderHeight*SCALE_FACTOR_TEXTURE, 0);
     FillFBOQueue(rightTextureQueue, rightFBOQueue);
   }
 
@@ -366,8 +372,11 @@ struct DeviceDelegateWaveVR::State {
       uint32_t ctl_touch = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Touch);
       uint32_t ctl_analog = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Analog);
 
-      const bool bumperPressed = (controller.is6DoF) ? WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger)
-                                  : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
+      // Flow fix MOHUS
+      //const bool bumperPressed = (controller.is6DoF) ? WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger)
+      //                          : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
+      const bool bumperPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger);
+
 
       // ABXY buttons
       if (ctl_button & WVR_InputId_Alias1_A) {
@@ -431,7 +440,8 @@ struct DeviceDelegateWaveVR::State {
       }
       delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_APP, -1, menuPressed, menuPressed);
 
-      float axisX, axisY = 0.0f;
+      float axisX = 0.0f;
+      float axisY = 0.0f;
       if (touchpadTouched) {
         WVR_Axis_t axis = WVR_GetInputAnalogAxis(controller.type, WVR_InputId_Alias1_Touchpad);
         axisX = axis.x;
@@ -605,7 +615,7 @@ DeviceDelegateWaveVR::RegisterImmersiveDisplay(ImmersiveDisplayPtr aDisplay) {
   }
 
   m.immersiveDisplay->SetCapabilityFlags(flags);
-  m.immersiveDisplay->SetEyeResolution(m.renderWidth, m.renderHeight);
+  m.immersiveDisplay->SetEyeResolution(m.renderWidth*SCALE_FACTOR_IMMERSIVE, m.renderHeight*SCALE_FACTOR_IMMERSIVE);
   m.UpdateStandingMatrix();
   m.UpdateBoundary();
   m.InitializeCameras();
@@ -709,11 +719,11 @@ DeviceDelegateWaveVR::ProcessEvents() {
         return;
       }
       case WVR_EventType_InteractionModeChanged: {
-        VRB_WAVE_EVENT_LOG("WVR_EventType_SystemInteractionModeChanged");
+        VRB_WAVE_EVENT_LOG("WVR_EventType_InteractionModeChanged");
       }
         break;
       case WVR_EventType_GazeTriggerTypeChanged: {
-        VRB_WAVE_EVENT_LOG("WVR_EventType_SystemGazeTriggerTypeChanged");
+        VRB_WAVE_EVENT_LOG("WVR_EventType_GazeTriggerTypeChanged");
       }
         break;
       case WVR_EventType_TrackingModeChanged: {
@@ -963,7 +973,7 @@ DeviceDelegateWaveVR::BindEye(const device::Eye aWhich) {
   }
   if (m.currentFBO) {
     m.currentFBO->Bind();
-    VRB_GL_CHECK(glViewport(0, 0, m.renderWidth, m.renderHeight));
+    VRB_GL_CHECK(glViewport(0, 0, m.renderWidth*SCALE_FACTOR_VIEWPORT, m.renderHeight*SCALE_FACTOR_VIEWPORT));
     VRB_GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
   } else {
     VRB_ERROR("No FBO found");
@@ -1025,7 +1035,18 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
           m.isModelDataReady[aModelIndex] = true;
         }//Critical Section: Set data ready flag.(End)
       } else {
-        VRB_LOG("[WaveVR] (%d[%p]): Load fail. Reason(%d)", mCtrlerType, this, result);
+        //MOHUS for Wave fix
+        mCtrlerType = WVR_DeviceType_Controller_Right;//WVR_DeviceType_HMD;
+        result = WVR_GetCurrentControllerModel(mCtrlerType, &m.modelCachedData[aModelIndex]);
+        if (result == WVR_Success) {
+          {//Critical Section: Set data ready flag.
+            std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
+            VRB_LOG("[WaveVR] (%d[%p]) Controller model from the SDK successfully loaded by second step: %d", mCtrlerType, this, hand)
+            m.isModelDataReady[aModelIndex] = true;
+          }//Critical Section: Set data ready flag.(End)
+        } else {
+          VRB_LOG("[WaveVR] (%d[%p]): Load fail. Reason(%d)", mCtrlerType, this, result);
+        }
       }
 
       if (m.isModelDataReady[aModelIndex]) {

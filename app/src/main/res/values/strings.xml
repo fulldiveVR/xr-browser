@@ -607,6 +607,9 @@
     <!-- This string is used to label the Foveated radio button that enables high-level fixed-foveated-rendering. -->
     <string name="developer_options_foveated_3">3</string>
 
+    <string name="developer_options_env_vive">VIVE Browser</string>
+    <string name="developer_options_env_space">Space</string>
+
     <!-- This string is used to label a set of radio buttons that allow the user to change the
      scroll direction of the remote controller. -->
     <string name="developer_options_scroll_direction">Scroll Direction</string>
@@ -918,7 +921,7 @@
 
     <!-- This string explains why Mozilla would like the user to allow the crash data to be uploaded.
          '%1$s' will be replaced at runtime with the app's domain name. -->
-    <string name="crash_dialog_message"><![CDATA[Please help Mozilla improve %1$s by sending your crash data. <a href="more">Learn More</a>]]></string>
+    <string name="crash_dialog_message"><![CDATA[Please help VIVEPORT improve %1$s by sending your crash data. <a href="more">Learn More</a>]]></string>
 
     <!-- This string labels a checkbox in the crash dialog box. When checked, the user will no longer
          be prompted for permission to upload crash data after an application crash. -->
@@ -1505,6 +1508,8 @@
     <!-- This string is for the tooltip that appears upon hovering the 'Home' button in the browser's navigation bar.
          'Home' refers to the browser's start page (e.g., the Firefox Reality Home Page). -->
     <string name="home_tooltip">Home</string>
+
+    <string name="vive_tooltip">VIVE Connect</string>
 
     <!-- This string is for the tooltip that appears upon hovering the 'Voice Search' (microphone) button in the
          browser's navigation bar. 'Voice Search' refers to the browser's system for searching the Web using

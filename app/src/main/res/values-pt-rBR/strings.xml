@@ -240,7 +240,7 @@
     <string name="search_placeholder">Pesquise na Web ou digite endereço</string>
     <string name="video_mode_180_top_bottom">Estéreo 180 de cima para baixo</string>
     <string name="video_controls_live">AO VIVO</string>
-    <string name="crash_dialog_message">Ajude a Mozilla a melhorar o %1$s enviando seus dados de falha. &lt;a href=more&gt;Saiba mais&lt;/a&gt;</string>
+    <string name="crash_dialog_message">Ajude a VIVEPORT a melhorar o %1$s enviando seus dados de falha. &lt;a href=more&gt;Saiba mais&lt;/a&gt;</string>
     <string name="video_mode_360">360</string>
     <string name="do_not_sent_button">Não envie</string>
     <string name="brightness_mode_normal">Normal</string>

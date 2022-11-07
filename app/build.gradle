@@ -102,11 +102,11 @@ ext.gleanDocsDirectory = "$rootDir/docs"
 android {
     compileSdkVersion build_versions.target_sdk
     defaultConfig {
-        applicationId "com.igalia.wolvic"
+        applicationId "com.vive.browser.wave"
         minSdkVersion build_versions.min_sdk
         targetSdkVersion build_versions.target_sdk
-        versionCode 52
-        versionName "1.2"
+        versionCode 20
+        versionName "1.5"
         buildConfigField "String", "GIT_HASH", "\"${getGitHash()}\""
         buildConfigField "Boolean", "DISABLE_CRASH_RESTART", getCrashRestartDisabled()
         buildConfigField "String", "AMO_COLLECTION", "\"fxr\""
@@ -135,7 +135,7 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
-    project.archivesBaseName = "Wolvic"
+    project.archivesBaseName = "VIVEBrowser"
 
 
     compileOptions {
