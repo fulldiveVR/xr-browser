@@ -103,7 +103,7 @@ public class Windows implements TrayListener, TopBarWidget.Delegate, TitleBarWid
             textureHeight = widgetPlacement.height;
             worldWidth = widgetPlacement.worldWidth;
             tabIndex = aTabIndex;
-            if (aWindow.isLibraryVisible()) {
+            if (aWindow.isLibraryVisible() || aWindow.isHomeVisible()) {
                 panelType = aWindow.getSelectedPanel();
 
             } else {
@@ -1583,7 +1583,7 @@ public void selectTab(@NonNull Session aTab) {
     }
 
     public boolean isSessionFocused(@NonNull Session session) {
-        return mRegularWindows.stream().anyMatch(window -> window.getSession() == session && !window.isLibraryVisible() && session.isPrivateMode() == mPrivateMode) ||
-                mPrivateWindows.stream().anyMatch(window -> window.getSession() == session && !window.isLibraryVisible() && session.isPrivateMode() == mPrivateMode );
+        return mRegularWindows.stream().anyMatch(window -> window.getSession() == session && !window.isLibraryVisible() && !window.isHomeVisible() && session.isPrivateMode() == mPrivateMode) ||
+                mPrivateWindows.stream().anyMatch(window -> window.getSession() == session && !window.isLibraryVisible() && !window.isHomeVisible() && session.isPrivateMode() == mPrivateMode );
     }
 }

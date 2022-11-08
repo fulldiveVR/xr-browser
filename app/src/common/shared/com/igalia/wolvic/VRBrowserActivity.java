@@ -468,14 +468,15 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     private void showWhatsNewDialogIfNeeded() {
-        if (SettingsStore.getInstance(this).isWhatsNewDisplayed() || mWindows.getFocusedWindow().isKioskMode()) {
-            return;
-        }
-
-        mWhatsNewWidget = new WhatsNewWidget(this);
-        mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
-        mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
-        mWhatsNewWidget.show(UIWidget.REQUEST_FOCUS);
+        return;
+//        if (SettingsStore.getInstance(this).isWhatsNewDisplayed() || mWindows.getFocusedWindow().isKioskMode()) {
+//            return;
+//        }
+//
+//        mWhatsNewWidget = new WhatsNewWidget(this);
+//        mWhatsNewWidget.setLoginOrigin(Accounts.LoginOrigin.NONE);
+//        mWhatsNewWidget.getPlacement().parentHandle = mWindows.getFocusedWindow().getHandle();
+//        mWhatsNewWidget.show(UIWidget.REQUEST_FOCUS);
     }
 
     @Override
@@ -732,7 +733,8 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
             if (extras.containsKey("background")) {
                 openInBackground = extras.getBoolean("background", false);
                 if (targetUri == null) {
-                    targetUri = Uri.parse(SettingsStore.getInstance(this).getHomepage());
+//                    targetUri = Uri.parse(SettingsStore.getInstance(this).getHomepage());
+                    targetUri = Uri.parse(WindowWidget.PREHOME_URL);
                 }
             }
 
@@ -740,7 +742,8 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
             if (extras.containsKey("create_new_window")) {
                 openInWindow = extras.getBoolean("create_new_window", false);
                 if (targetUri == null) {
-                    targetUri = Uri.parse(SettingsStore.getInstance(this).getHomepage());
+//                    targetUri = Uri.parse(SettingsStore.getInstance(this).getHomepage());
+                    targetUri = Uri.parse(WindowWidget.PREHOME_URL);
                 }
             }
 
@@ -1758,7 +1761,8 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     @Override
-    public void showVRVideo(final int aWindowHandle, final @VideoProjectionMenuWidget.VideoProjectionFlags int aVideoProjection) {
+//    public void showVRVideo(final int aWindowHandle, final @VideoProjectionMenuWidget.VideoProjectionFlags int aVideoProjection) {
+    public void showVRVideo(final int aWindowHandle, final int aVideoProjection) {
         queueRunnable(() -> showVRVideoNative(aWindowHandle, aVideoProjection));
     }
 

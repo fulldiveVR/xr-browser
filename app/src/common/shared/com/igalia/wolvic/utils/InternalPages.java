@@ -157,6 +157,35 @@ public class InternalPages {
         return html.getBytes();
     }
 
+    public static byte[] createHomePage(Context context,
+                                        PageResources resources) {
+        String html = readRawResourceString(context, resources.html);
+        String css = readRawResourceString(context, resources.css);
+
+        //String pageBody = context.getString(R.string.private_browsing_body, context.getString(R.string.app_name));
+        //html = html
+        //        .replace("%pageTitle%", context.getString(R.string.private_browsing_title))
+        //        .replace("%pageBody%", pageBody)
+        //        .replace("%css%", css)
+        //        .replace("%privateBrowsingSupportUrl%", context.getString(R.string.private_browsing_support_url));
+
+        return html.getBytes();
+    }
+
+    public static String makeHomePageURL(Context context) {
+        PageResources resources = InternalPages.PageResources.create(R.raw.home_page, R.raw.home_style);
+        String html = readRawResourceString(context, resources.html);
+        //return html.getBytes();
+        return "data:text/html;base64," + Base64.encodeToString(html.getBytes(), Base64.NO_WRAP);
+    }
+
+    public static String makePreHomePageURL(Context context) {
+        PageResources resources = InternalPages.PageResources.create(R.raw.prehome, R.raw.home_style);
+        String html = readRawResourceString(context, resources.html);
+        //return html.getBytes();
+        return "data:text/html;base64," + Base64.encodeToString(html.getBytes(), Base64.NO_WRAP);
+    }
+
     private static String readRawResourceString(Context context, int resource) {
         StringBuilder total = new StringBuilder();
         try {

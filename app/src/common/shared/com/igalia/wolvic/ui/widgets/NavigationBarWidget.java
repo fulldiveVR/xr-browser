@@ -111,7 +111,7 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
     private BrightnessMenuWidget mBrightnessWidget;
     private MediaControlsWidget mMediaControlsWidget;
     private Media mFullScreenMedia;
-    private @VideoProjectionMenuWidget.VideoProjectionFlags int mAutoSelectedProjection = VIDEO_PROJECTION_NONE;
+    private int mAutoSelectedProjection = VIDEO_PROJECTION_NONE;
     private HamburgerMenuWidget mHamburgerMenu;
     private QuickPermissionWidget mQuickPermissionWidget;
     private SendTabDialogWidget mSendTabDialog;
@@ -254,6 +254,15 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
                 mAudio.playSound(AudioEngine.Sound.CLICK);
             }
             mNavigationListeners.forEach(NavigationListener::onHome);
+        });
+
+        mBinding.navigationBarNavigation.viveButton.setOnClickListener(v -> {
+            v.requestFocusFromTouch();
+            getSession().loadUri(getResources().getString(R.string.vivepage_url));
+            if (mAudio != null) {
+                mAudio.playSound(AudioEngine.Sound.CLICK);
+            }
+            //mNavigationListeners.forEach(NavigationListener::onHome);
         });
 
         mBinding.navigationBarNavigation.whatsNew.setOnClickListener(v -> {
@@ -812,7 +821,7 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
         mWidgetManager.updateWidget(mAttachedWindow);
     }
 
-    private void enterVRVideo(@VideoProjectionMenuWidget.VideoProjectionFlags int aProjection) {
+    private void enterVRVideo(int aProjection) {
         if (mViewModel.getIsInVRVideo().getValue().get()) {
             return;
         }
@@ -878,7 +887,7 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
         boolean composited = mProjectionMenu.getPlacement().composited;
         mProjectionMenu.getPlacement().copyFrom(mProjectionMenuPlacement);
         mProjectionMenu.getPlacement().composited = composited;
-        mProjectionMenu.setSelectedProjection(VIDEO_PROJECTION_NONE);
+        mProjectionMenu.setSelectedProjection(VideoProjectionMenuWidget.VIDEO_PROJECTION_NONE);
         mWidgetManager.updateWidget(mProjectionMenu);
         closeFloatingMenus();
         mWidgetManager.setControllersVisible(true);
@@ -918,7 +927,12 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
             updateTrackingProtection();
         }
 
-        mBinding.navigationBarNavigation.reloadButton.setEnabled(!UrlUtils.isPrivateAboutPage(getContext(), url));
+        mBinding.navigationBarNavigation.reloadButton.setEnabled(!UrlUtils.isPrivateAboutPage(getContext(), url) && !UrlUtils.isHomeAboutPage(getContext(), url));
+        if (UrlUtils.isHomeAboutPage(getContext(), url)) {
+            String home_url = getContext().getString(R.string.url_home_title, getContext().getString(R.string.app_name));
+            mViewModel.setUrl(home_url);
+            mBinding.navigationBarNavigation.urlBar.setText(home_url);
+        }
     }
 
     // Content delegate
@@ -1216,6 +1230,8 @@ public class NavigationBarWidget extends UIWidget implements WSession.Navigation
             public void onSwitchMode() {
                 int uaMode = mAttachedWindow.getSession().getUaMode();
                 if (uaMode == WSessionSettings.USER_AGENT_MODE_DESKTOP) {
+                    //MOHUS desktop mode
+                    //final int defaultUaMode = GeckoSessionSettings.USER_AGENT_MODE_VR;//SettingsStore.getInstance(mAppContext).getUaMode();
                     final int defaultUaMode = SettingsStore.getInstance(mAppContext).getUaMode();
                     mHamburgerMenu.setUAMode(defaultUaMode);
                     mAttachedWindow.getSession().setUaMode(defaultUaMode);

@@ -83,7 +83,8 @@ public class EnvironmentsManager implements DownloadsManager.DownloadsListener, 
                 mApplicationDelegate.updateEnvironment();
 
             } else {
-                downloadEnvironment(envId);
+                //MOHUS
+//                downloadEnvironment(envId);
             }
         }
     }
@@ -105,7 +106,8 @@ public class EnvironmentsManager implements DownloadsManager.DownloadsListener, 
                 environmentPath = EnvironmentUtils.getExternalEnvPath(mContext, envId);
 
             } else {
-                downloadEnvironment(envId);
+                //MOHUS
+//                downloadEnvironment(envId);
             }
         }
 

@@ -60,10 +60,12 @@ import com.igalia.wolvic.downloads.DownloadsManager;
 import com.igalia.wolvic.telemetry.TelemetryService;
 import com.igalia.wolvic.ui.viewmodel.WindowViewModel;
 import com.igalia.wolvic.ui.views.library.LibraryPanel;
+import com.igalia.wolvic.ui.views.home.HomePanel;
 import com.igalia.wolvic.ui.widgets.dialogs.PromptDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.SelectionActionWidget;
 import com.igalia.wolvic.ui.widgets.menus.ContextMenuWidget;
 import com.igalia.wolvic.ui.widgets.prompts.PromptData;
+import com.igalia.wolvic.utils.InternalPages;
 import com.igalia.wolvic.utils.StringUtils;
 import com.igalia.wolvic.utils.UrlUtils;
 import com.igalia.wolvic.utils.ViewUtils;
@@ -123,6 +125,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     private Session mSession;
     private int mWindowId;
     private LibraryPanel mLibrary;
+    private HomePanel mHome;
     private Windows.WindowPlacement mWindowPlacement = Windows.WindowPlacement.FRONT;
     private Windows.WindowPlacement mWindowPlacementBeforeFullscreen = Windows.WindowPlacement.FRONT;
     private float mMaxWindowScale = 3;
@@ -142,6 +145,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     private SharedPreferences mPrefs;
     private DownloadsManager mDownloadsManager;
     private float mBrowserDensity;
+
+    public static String PREHOME_URL = "file:///android_asset/html/index.html";
 
     public interface WindowListener {
         default void onFocusRequest(@NonNull WindowWidget aWindow) {}
@@ -176,7 +181,16 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         initialize(aContext);
     }
 
+    private void restartGeckoViewRendering() {
+        mSetViewQueuedCalls = new CopyOnWriteArrayList<>();
+        if (mSession.getGeckoSession() != null) {
+            onCurrentSessionChange(null, mSession.getGeckoSession());
+        }
+    }
+
     private void initialize(Context aContext) {
+        PREHOME_URL = InternalPages.makePreHomePageURL(aContext);
+
         mSetViewQueuedCalls = new CopyOnWriteArrayList<>();
 
         mPrefs = PreferenceManager.getDefaultSharedPreferences(getContext());
@@ -202,6 +216,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         setupListeners(mSession);
 
         mLibrary = new LibraryPanel(aContext);
+
+        mHome = new HomePanel(aContext, this);
 
         SessionStore.get().getBookmarkStore().addListener(mBookmarksListener);
 
@@ -316,11 +332,15 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
     @Override
     protected void onDismiss() {
-        if (mViewModel.getIsLibraryVisible().getValue().get()) {
-            if (!mLibrary.onBack()) {
+        if (mViewModel.getIsLibraryVisible().getValue().get() || mViewModel.getIsHomeVisible().getValue().get()) {
+            if ((mViewModel.getIsLibraryVisible().getValue().get()) && (!mLibrary.onBack())) {
                 hidePanel();
             }
-
+            else {
+                if (mViewModel.getIsHomeVisible().getValue().get()) {
+                    hidePanel();
+                }
+            }
         } else {
             if (mSession.canGoBack()) {
                 mSession.goBack();
@@ -352,7 +372,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         super.onConfigurationChanged(newConfig);
 
         mLibrary.onConfigurationChanged(newConfig);
-
+        mHome.onConfigurationChanged(newConfig);
         mViewModel.refresh();
     }
 
@@ -361,6 +381,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         hideContextMenus();
         releaseWidget();
         mLibrary.onDestroy();
+        mHome.onDestroy();
         mViewModel.setIsTopBarVisible(false);
         mViewModel.setIsTitleBarVisible(false);
         SessionStore.get().destroySession(mSession);
@@ -385,11 +406,20 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     }
 
     public void loadHome() {
+        loadHomeInner(false);
+    }
+
+    public void loadHomeInner(boolean isRealHome) {
         if (mSession.isPrivateMode()) {
             mSession.loadPrivateBrowsingPage();
 
         } else {
-            mSession.loadUri(SettingsStore.getInstance(getContext()).getHomepage());
+            if (isRealHome) {
+                mSession.loadUri(SettingsStore.getInstance(getContext()).getHomepage());
+            }
+            else {
+                mSession.loadUri(PREHOME_URL);
+            }
         }
     }
 
@@ -423,7 +453,9 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                     mRenderer = new UISurfaceTextureRenderer(mSurface, mWidgetPlacement.textureWidth(), mWidgetPlacement.textureHeight());
                 }
                 mWidgetManager.updateWidget(WindowWidget.this);
-                mWidgetManager.pushWorldBrightness(WindowWidget.this, WidgetManagerDelegate.DEFAULT_DIM_BRIGHTNESS);
+                if (view != mHome) {
+                    mWidgetManager.pushWorldBrightness(WindowWidget.this, WidgetManagerDelegate.DEFAULT_DIM_BRIGHTNESS);
+                }
                 mWidgetManager.pushBackHandler(mBackHandler);
                 setWillNotDraw(false);
                 postInvalidate();
@@ -462,6 +494,9 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                 mWidgetPlacement.density = getBrowserDensity();
                 mWidgetManager.updateWidget(WindowWidget.this);
                 mWidgetManager.popWorldBrightness(WindowWidget.this);
+                if (view != mHome) {
+                    mWidgetManager.popWorldBrightness(WindowWidget.this);
+                }
                 mWidgetManager.popBackHandler(mBackHandler);
                 if (mTexture != null) {
                     resumeCompositor();
@@ -469,6 +504,10 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                 recreateWidgetSurfaceIfNeeded(prevDensity);
             }
         }
+    }
+
+    public boolean isHomeVisible() {
+        return mViewModel.getIsHomeVisible().getValue().get();
     }
 
     public boolean isLibraryVisible() {
@@ -485,22 +524,25 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
     public @Windows.PanelType
     int getSelectedPanel() {
+        if (isHomeVisible()) {
+            return mHome.getSelectedPanelType();
+        }
         return mLibrary.getSelectedPanelType();
     }
 
     private void hideLibraryPanel() {
-        if (mViewModel.getIsLibraryVisible().getValue().get()) {
+        if ( mViewModel.getIsLibraryVisible().getValue().get() || mViewModel.getIsHomeVisible().getValue().get()) {
             hidePanel(true);
         }
     }
 
     public void switchPanel(@Windows.PanelType int panelType) {
-        if (mViewModel.getIsLibraryVisible().getValue().get()) {
-            hidePanel(true);
+//        if (mViewModel.getIsLibraryVisible().getValue().get()) {
+//            hidePanel(true);
 
-        } else {
+//        } else {
             showPanel(panelType, true);
-        }
+//        }
     }
 
     Runnable mRestoreFirstPaint;
@@ -510,8 +552,41 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     }
 
     private void showPanel(@Windows.PanelType int panelType, boolean switchSurface) {
+        if (panelType == Windows.HOME) {
+            if (isLibraryVisible()) {
+                hideLibraryPanel();
+            }
+            if (isHomeVisible()) {
+                return;
+            }
+            boolean bSaved = mAfterFirstPaint;
+            //mAfterFirstPaint = true;
+            setView(mHome, switchSurface);
+            //mAfterFirstPaint = bSaved;
+            mHome.selectPanel(panelType);
+            mHome.onShow();
+            mViewModel.setIsHomeVisible(true);
+
+            if (mRestoreFirstPaint == null && !isFirstPaintReady() && (mFirstDrawCallback != null) && (mSurface != null)) {
+                final Runnable firstDrawCallback = mFirstDrawCallback;
+                onFirstContentfulPaint(mSession.getGeckoSession());
+                mRestoreFirstPaint = () -> {
+                    setFirstPaintReady(false);
+                    setFirstDrawCallback(firstDrawCallback);
+                    if (mWidgetManager != null) {
+                        mWidgetManager.updateWidget(WindowWidget.this);
+                    }
+                };
+            }
+            return;
+        }
+        else
         if (mLibrary != null) {
+            if (isHomeVisible()) {
+                hideLibraryPanel();
+            }
             if (mView == null) {
+                boolean bSaved = mAfterFirstPaint;
                 setView(mLibrary, switchSurface);
                 mLibrary.selectPanel(panelType);
                 mLibrary.onShow();
@@ -539,10 +614,28 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     }
 
     private void hidePanel(boolean switchSurface) {
-        if (mView != null && mLibrary != null) {
+        if (mView != null && mLibrary != null && mView == mLibrary) {
             unsetView(mLibrary, switchSurface);
             mLibrary.onHide();
             mViewModel.setIsPanelVisible(false);
+        } else {
+            if (mView != null && mHome != null && mView == mHome) {
+                unsetView(mHome, switchSurface);
+                //unsetView(mHome, true);
+                mHome.onHide();
+                mViewModel.setIsHomeVisible(false);
+                //restartGeckoViewRendering();
+                //if (mWidgetManager != null) {
+                //    mWidgetManager.updateWidget(WindowWidget.this);
+                //}
+                //if (switchSurface && mRestoreFirstPaint != null) {
+                //    mRestoreFirstPaint.run();
+                //    mRestoreFirstPaint = null;
+                //}
+                //initialize(getContext());
+                //return;
+
+            }
         }
         if (switchSurface && mRestoreFirstPaint != null) {
             mRestoreFirstPaint.run();
@@ -1776,11 +1869,13 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
     };
 
     // ISession.NavigationDelegate
+    private String mPageStartUri = null;
 
     @Override
     public void onPageStart(@NonNull WSession aSession, @NonNull String aUri) {
         mCaptureOnPageStop = true;
         mViewModel.setIsLoading(true);
+        mPageStartUri = aUri;
     }
 
     @Override
@@ -1791,6 +1886,11 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         }
 
         mViewModel.setIsLoading(false);
+        if (PREHOME_URL.equalsIgnoreCase(mPageStartUri)) {
+            mPageStartUri = null;
+            loadHomeInner(true);
+        }
+        mPageStartUri = null;
     }
 
     public void captureImage() {
@@ -1850,6 +1950,9 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
             } else if (UrlUtils.isAddonsUrl(uri.toString())) {
                 showPanel(Windows.ADDONS);
+
+            } else if (UrlUtils.isHomeUrl(uri.toString())) {
+                showPanel(Windows.HOME);
 
             } else {
                 hideLibraryPanel();
@@ -1964,6 +2067,10 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         Uri parsedUri = Uri.parse(uri);
         String scheme = parsedUri.getScheme();
         if (scheme == null) {
+            return false;
+        }
+
+        if (PREHOME_URL.equalsIgnoreCase(uri)) {
             return false;
         }
 

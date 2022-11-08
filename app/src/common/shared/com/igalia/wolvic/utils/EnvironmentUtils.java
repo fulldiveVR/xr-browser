@@ -175,28 +175,28 @@ public class EnvironmentUtils {
      * @return The Remote environments list or null if they couldn't be found.
      */
     public static Environment[] getExternalEnvironments(@NonNull Context context, @NonNull String versionName) {
-        Map<String, RemoteProperties> properties = SettingsStore.getInstance(context).getRemoteProperties();
-        if (properties != null) {
-            // If there are environments for the current version we return those,
-            // otherwise return the ones from the most recent version
-            if (properties.containsKey(versionName)) {
-                RemoteProperties versionProperties = properties.get(versionName);
-                if (versionProperties != null && versionProperties.getEnvironments() != null) {
-                    return versionProperties.getEnvironments();
-                }
-            }
-
-            Set<String> keys = properties.keySet();
-            List<String> keysList = keys.stream()
-                    .sorted((o1, o2) -> o2.compareTo(o1))
-                    .collect(Collectors.toList());
-            for (String key : keysList) {
-                RemoteProperties props = properties.get(key);
-                if (props != null && props.getEnvironments() != null) {
-                    return props.getEnvironments();
-                }
-            }
-        }
+//        Map<String, RemoteProperties> properties = SettingsStore.getInstance(context).getRemoteProperties();
+//        if (properties != null) {
+//            // If there are environments for the current version we return those,
+//            // otherwise return the ones from the most recent version
+//            if (properties.containsKey(versionName)) {
+//                RemoteProperties versionProperties = properties.get(versionName);
+//                if (versionProperties != null && versionProperties.getEnvironments() != null) {
+//                    return versionProperties.getEnvironments();
+//                }
+//            }
+//
+//            Set<String> keys = properties.keySet();
+//            List<String> keysList = keys.stream()
+//                    .sorted((o1, o2) -> o2.compareTo(o1))
+//                    .collect(Collectors.toList());
+//            for (String key : keysList) {
+//                RemoteProperties props = properties.get(key);
+//                if (props != null && props.getEnvironments() != null) {
+//                    return props.getEnvironments();
+//                }
+//            }
+//        }
 
         return null;
     }
