@@ -93,6 +93,7 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
     private transient SharedPreferences mPrefs;
     private transient WRuntime mRuntime;
     private transient byte[] mPrivatePage;
+    private transient byte[] mHomePage;
     private transient boolean mFirstContentfulPaint;
     private transient long mKeepAlive;
     private transient Media mMedia;
@@ -195,6 +196,10 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
 
         InternalPages.PageResources pageResources = InternalPages.PageResources.create(R.raw.private_mode, R.raw.private_style);
         mPrivatePage = InternalPages.createAboutPage(mContext, pageResources);
+
+        InternalPages.PageResources pageResourcesHome = InternalPages.PageResources.create(R.raw.home_page, R.raw.home_style);
+        mHomePage = InternalPages.createHomePage(mContext, pageResourcesHome);
+        //Log.e(LOGTAG,"[FULLDIVE] mHomePage[].length = " + String.valueOf(mHomePage.length));
 
         if (sUserAgentOverride == null) {
             sUserAgentOverride = new UriOverride("user agent");
@@ -738,6 +743,10 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         return UrlUtils.isHomeUri(mContext, aUri);
     }
 
+    public Boolean isPreHomeUri(String aUri) {
+        return UrlUtils.isPrehomeUri(mContext, aUri);
+    }
+
     public String getCurrentUri() {
         if (mState.mUri == null) {
             return "";
@@ -865,13 +874,15 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         }
     }
 
+
+
     public void loadUri(String aUri) {
         loadUri(aUri, WSession.LOAD_FLAGS_NONE);
     }
 
     public void loadUri(String aUri, int flags) {
         if (aUri == null) {
-            aUri = getHomeUri();
+            aUri = WindowWidget.PREHOME_URL;
         }
         if (mState.mSession != null) {
             Log.d(LOGTAG, "Loading URI: " + aUri);
