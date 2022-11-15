@@ -214,6 +214,7 @@ android {
             manifestPlaceholders = [ headtrackingRequired:"false", permissionToRemove:"android.permission.CAMERA" ]
         }
 
+
         wavevr {
             minSdkVersion build_versions.min_sdk_wave
             targetSdkVersion build_versions.target_sdk_wave

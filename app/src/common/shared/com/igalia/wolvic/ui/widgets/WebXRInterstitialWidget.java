@@ -6,12 +6,13 @@ import android.view.LayoutInflater;
 
 import androidx.databinding.DataBindingUtil;
 
-import com.igalia.wolvic.PlatformActivity;
 import com.igalia.wolvic.R;
 import com.igalia.wolvic.VRBrowserActivity;
 import com.igalia.wolvic.databinding.WebxrInterstitialBinding;
 import com.igalia.wolvic.utils.DeviceType;
 import com.igalia.wolvic.utils.ViewUtils;
+
+import org.mozilla.vrbrowser.PlatformActivity;
 
 import java.util.ArrayList;
 

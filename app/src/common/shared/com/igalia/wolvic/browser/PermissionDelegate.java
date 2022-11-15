@@ -11,7 +11,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Observer;
 
-import com.igalia.wolvic.PlatformActivity;
 import com.igalia.wolvic.R;
 import com.igalia.wolvic.browser.api.WResult;
 import com.igalia.wolvic.browser.api.WSession;
@@ -25,6 +24,8 @@ import com.igalia.wolvic.ui.widgets.WindowWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.PermissionWidget;
 import com.igalia.wolvic.utils.SystemUtils;
 import com.igalia.wolvic.utils.UrlUtils;
+
+import org.mozilla.vrbrowser.PlatformActivity;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +47,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
     public interface PlatformLocationOverride {
         void onLocationGranted(Session session);
     }
+
     public static PlatformLocationOverride sPlatformLocationOverride;
 
     public PermissionDelegate(Context aContext, WidgetManagerDelegate aWidgetManager) {
@@ -53,7 +55,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         mWidgetManager = aWidgetManager;
         mWidgetManager.addPermissionListener(this);
         SessionStore.get().setPermissionDelegate(this);
-        mSitePermissionModel = new SitePermissionViewModel((Application)aContext.getApplicationContext());
+        mSitePermissionModel = new SitePermissionViewModel((Application) aContext.getApplicationContext());
         mSitePermissionModel.getAll().observeForever(mSitePermissionObserver);
     }
 
@@ -68,7 +70,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         }
 
         boolean granted = true;
-        for (int result: grantResults) {
+        for (int result : grantResults) {
             if (result != PackageManager.PERMISSION_GRANTED) {
                 granted = false;
                 break;
@@ -82,7 +84,8 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         }
     }
 
-    private @SitePermission.Category int toSitePermission(final PermissionWidget.PermissionType aType) {
+    private @SitePermission.Category
+    int toSitePermission(final PermissionWidget.PermissionType aType) {
         // So far we only handle Location.
         switch (aType) {
             case Location:
@@ -158,7 +161,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         Log.d(LOGTAG, "onAndroidPermissionsRequest: " + Arrays.toString(permissions));
         ArrayList<String> missingPermissions = new ArrayList<>();
         ArrayList<String> filteredPermissions = new ArrayList<>();
-        for (String permission: permissions) {
+        for (String permission : permissions) {
             if (PlatformActivity.filterPermission(permission)) {
                 Log.d(LOGTAG, "Skipping permission: " + permission);
                 filteredPermissions.add(permission);
@@ -181,7 +184,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         } else {
             Log.d(LOGTAG, "Request Android permissions: " + missingPermissions);
             mCallback = aCallback;
-            ((Activity)mContext).requestPermissions(missingPermissions.toArray(new String[missingPermissions.size()]), PERMISSION_REQUEST_CODE);
+            ((Activity) mContext).requestPermissions(missingPermissions.toArray(new String[missingPermissions.size()]), PERMISSION_REQUEST_CODE);
         }
     }
 
@@ -195,7 +198,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         if (perm.permission == PERMISSION_AUTOPLAY_INAUDIBLE) {
             // https://hacks.mozilla.org/2019/02/firefox-66-to-block-automatically-playing-audible-video-and-audio/
             return WResult.fromValue(ContentPermission.VALUE_ALLOW);
-        } else if(perm.permission == PERMISSION_AUTOPLAY_AUDIBLE) {
+        } else if (perm.permission == PERMISSION_AUTOPLAY_AUDIBLE) {
             if (SettingsStore.getInstance(mContext).isAutoplayEnabled()) {
                 return WResult.fromValue(ContentPermission.VALUE_ALLOW);
             } else {
@@ -358,6 +361,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
             }
         }
     }
+
     public void addPermissionException(@NonNull String uri, @SitePermission.Category int category, boolean allowed) {
         assert category != SitePermission.SITE_PERMISSION_NONE;
         @Nullable SitePermission site = mSitePermissions.stream()
@@ -372,7 +376,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         mSitePermissionModel.insertSite(site);
 
         // Reload URIs with the same domain
-        for (WindowWidget window: mWidgetManager.getWindows().getCurrentWindows()) {
+        for (WindowWidget window : mWidgetManager.getWindows().getCurrentWindows()) {
             Session session = window.getSession();
             if (uri.equalsIgnoreCase(UrlUtils.getHost(session.getCurrentUri()))) {
                 session.reload(WSession.LOAD_FLAGS_BYPASS_CACHE);
@@ -393,7 +397,7 @@ public class PermissionDelegate implements WSession.PermissionDelegate, WidgetMa
         }
 
         // Reload URIs with the same domain
-        for (WindowWidget window: mWidgetManager.getWindows().getCurrentWindows()) {
+        for (WindowWidget window : mWidgetManager.getWindows().getCurrentWindows()) {
             Session session = window.getSession();
             if (uri.equalsIgnoreCase(UrlUtils.getHost(session.getCurrentUri()))) {
                 session.reload(WSession.LOAD_FLAGS_BYPASS_CACHE);
