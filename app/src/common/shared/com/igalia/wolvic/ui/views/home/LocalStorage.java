@@ -1,4 +1,4 @@
-package org.mozilla.vrbrowser.ui.views.home;
+package com.igalia.wolvic.ui.views.home;
 
 
 import android.content.Context;

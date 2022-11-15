@@ -183,8 +183,8 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
     private void restartGeckoViewRendering() {
         mSetViewQueuedCalls = new CopyOnWriteArrayList<>();
-        if (mSession.getGeckoSession() != null) {
-            onCurrentSessionChange(null, mSession.getGeckoSession());
+        if (mSession.getWSession() != null) {
+            onCurrentSessionChange(null, mSession.getWSession());
         }
     }
 
@@ -569,7 +569,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
 
             if (mRestoreFirstPaint == null && !isFirstPaintReady() && (mFirstDrawCallback != null) && (mSurface != null)) {
                 final Runnable firstDrawCallback = mFirstDrawCallback;
-                onFirstContentfulPaint(mSession.getGeckoSession());
+                onFirstContentfulPaint(mSession.getWSession());
                 mRestoreFirstPaint = () -> {
                     setFirstPaintReady(false);
                     setFirstDrawCallback(firstDrawCallback);

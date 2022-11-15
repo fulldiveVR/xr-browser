@@ -1,4 +1,4 @@
-package org.mozilla.vrbrowser.ui.delegates;
+package com.igalia.wolvic.ui.delegates;
 
 
 import android.view.View;

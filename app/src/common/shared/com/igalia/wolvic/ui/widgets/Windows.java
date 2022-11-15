@@ -155,6 +155,7 @@ public class Windows implements TrayListener, TopBarWidget.Delegate, TitleBarWid
     public static final int DOWNLOADS = 3;
     public static final int ADDONS = 4;
     public static final int NOTIFICATIONS = 5;
+    public static final int HOME = 6;
 
     public enum WindowPlacement{
         FRONT(0),

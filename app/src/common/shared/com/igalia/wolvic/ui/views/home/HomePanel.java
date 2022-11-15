@@ -1,4 +1,4 @@
-package org.mozilla.vrbrowser.ui.views.home;
+package com.igalia.wolvic.ui.views.home;
 
 import static org.mozilla.gecko.util.ThreadUtils.runOnUiThread;
 
@@ -24,20 +24,19 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.databinding.DataBindingUtil;
 
-import com.vive.browser.wave.R;
-import org.mozilla.vrbrowser.VRBrowserActivity;
-import org.mozilla.vrbrowser.VRBrowserApplication;
-import org.mozilla.vrbrowser.addons.views.AddonsView;
-import com.vive.browser.wave.databinding.HomeBinding;
+import com.igalia.wolvic.R;
+import com.igalia.wolvic.VRBrowserActivity;
+import com.igalia.wolvic.VRBrowserApplication;
+import com.igalia.wolvic.databinding.HomeBinding;
 
-import org.mozilla.vrbrowser.browser.engine.Session;
-import org.mozilla.vrbrowser.browser.engine.SessionStore;
-import org.mozilla.vrbrowser.ui.delegates.HomeNavigationDelegate;
-import org.mozilla.vrbrowser.ui.delegates.LibraryNavigationDelegate;
-import org.mozilla.vrbrowser.ui.widgets.WidgetManagerDelegate;
-import org.mozilla.vrbrowser.ui.widgets.WindowWidget;
-import org.mozilla.vrbrowser.ui.widgets.Windows;
-import org.mozilla.vrbrowser.utils.InternalPages;
+import com.igalia.wolvic.browser.engine.Session;
+import com.igalia.wolvic.browser.engine.SessionStore;
+
+import com.igalia.wolvic.ui.delegates.HomeNavigationDelegate;
+import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate;
+import com.igalia.wolvic.ui.widgets.WindowWidget;
+import com.igalia.wolvic.ui.widgets.Windows;
+import com.igalia.wolvic.utils.InternalPages;
 
 import java.io.ByteArrayOutputStream;
 import java.util.concurrent.Executor;

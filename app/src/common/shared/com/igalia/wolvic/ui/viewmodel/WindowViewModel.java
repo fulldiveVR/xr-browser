@@ -23,6 +23,7 @@ import com.igalia.wolvic.browser.SettingsStore;
 import com.igalia.wolvic.browser.api.WContentBlocking;
 import com.igalia.wolvic.ui.widgets.Windows;
 import com.igalia.wolvic.utils.UrlUtils;
+import org.mozilla.geckoview.ContentBlocking;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;

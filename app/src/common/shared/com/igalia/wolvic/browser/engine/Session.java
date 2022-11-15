@@ -46,6 +46,7 @@ import com.igalia.wolvic.browser.content.TrackingProtectionPolicy;
 import com.igalia.wolvic.browser.content.TrackingProtectionStore;
 import com.igalia.wolvic.geolocation.GeolocationData;
 import com.igalia.wolvic.telemetry.TelemetryService;
+import com.igalia.wolvic.ui.widgets.WindowWidget;
 import com.igalia.wolvic.utils.BitmapCache;
 import com.igalia.wolvic.utils.InternalPages;
 import com.igalia.wolvic.utils.SystemUtils;

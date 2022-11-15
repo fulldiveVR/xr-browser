@@ -3,7 +3,7 @@
     <data>
         <variable
             name="delegate"
-            type="org.mozilla.vrbrowser.ui.delegates.HomeNavigationDelegate" />
+            type="com.igalia.wolvic.ui.delegates.HomeNavigationDelegate" />
         <variable
             name="canGoBack"
             type="boolean" />

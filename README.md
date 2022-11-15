@@ -77,7 +77,9 @@ Download the [VIVE Wave SDK](https://developer.vive.com/resources/knowledgebase/
 
 ```bash
 mkdir -p third_party/wavesdk
-cp /path/to/the/sdk/2.0.32/SDK/libs/wvr_client.aar third_party/wavesdk
+wget -O third_party/wavesdk/wave_5.0.3_native.zip https://dl.vive.com/SDK/wave/wave_5.0.3_native.zip
+cd third_party/wavesdk && unzip  wave_5.0.3_native.zip
+cp third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.3-u05/wvr_client-5.0.3-u05.aar third_party/wavesdk/wvr_client-5.0.3-u05.aar
 cp ./extra/wavesdk/build.gradle ./third_party/wavesdk
 ```
 
