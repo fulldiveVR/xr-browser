@@ -38,6 +38,7 @@
 #include "OpenXRHelpers.h"
 #include "OpenXRSwapChain.h"
 #include "OpenXRInput.h"
+#include "OpenXRInputMappings.h"
 #include "OpenXRExtensions.h"
 #include "OpenXRLayers.h"
 
@@ -438,6 +439,14 @@ struct DeviceDelegateOpenXR::State {
       sessionBeginInfo.primaryViewConfigurationType = viewConfigType;
       CHECK_XRCMD(xrBeginSession(session, &sessionBeginInfo));
       vrReady = true;
+
+      if (mHandTrackingSupported && input) {
+        input->UpdateInteractionProfile(*controller, OculusTouch.path);
+        if (controllersReadyCallback && input->AreControllersReady()) {
+           controllersReadyCallback();
+           controllersReadyCallback = nullptr;
+        }
+      }
     }
 
   void HandleSessionEvent(const XrEventDataSessionStateChanged& event) {
@@ -681,7 +690,7 @@ DeviceDelegateOpenXR::ProcessEvents() {
       }
       case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
         if (m.input) {
-          m.input->UpdateInteractionProfile(*m.controller);
+          m.input->UpdateInteractionProfile(*m.controller, nullptr);
           if (m.controllersReadyCallback && m.input->AreControllersReady()) {
             m.controllersReadyCallback();
             m.controllersReadyCallback = nullptr;
