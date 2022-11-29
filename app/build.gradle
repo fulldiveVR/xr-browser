@@ -105,8 +105,8 @@ android {
         applicationId "com.vive.browser.wave"
         minSdkVersion build_versions.min_sdk
         targetSdkVersion build_versions.target_sdk
-        versionCode 20
-        versionName "1.5"
+        versionCode 110
+        versionName "1.10"
         buildConfigField "String", "GIT_HASH", "\"${getGitHash()}\""
         buildConfigField "Boolean", "DISABLE_CRASH_RESTART", getCrashRestartDisabled()
         buildConfigField "String", "AMO_COLLECTION", "\"fxr\""
@@ -175,6 +175,7 @@ android {
 
     lintOptions {
         disable "ExtraTranslation"
+        disable "Instantiatable"
     }
 
     flavorDimensions "platform", "abi", "country"

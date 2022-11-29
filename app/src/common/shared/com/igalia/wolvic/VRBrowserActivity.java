@@ -689,7 +689,7 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
         Uri targetUri = null;
         Bundle extras;
 
-        if (dataUri != null && dataUri.getScheme().equals("wolvic") && dataUri.getHost().equals("com.igalia.wolvic")) {
+        if (dataUri != null && dataUri.getScheme().equals("vivebrowser") && dataUri.getHost().equals("openurl")) {
             Log.d(LOGTAG, "Parsing custom URI from intent: " + dataUri);
 
             extras = new Bundle();
