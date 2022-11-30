@@ -91,7 +91,7 @@ public class SettingsStore {
     public final static int MAX_WINDOW_WIDTH_DEFAULT = 1200;
     public final static int MAX_WINDOW_HEIGHT_DEFAULT = 1200;
     public final static int POINTER_COLOR_DEFAULT_DEFAULT = Color.parseColor("#FFFFFF");
-    public final static int SCROLL_DIRECTION_DEFAULT = 0;
+    public final static int SCROLL_DIRECTION_DEFAULT = 1;
     public final static String ENV_DEFAULT = "vive";
     public final static int MSAA_DEFAULT_LEVEL = 1;
     public final static boolean AUDIO_ENABLED = false;
