@@ -337,8 +337,8 @@ ControllerContainer::SetModelVisible(const int32_t aControllerIndex, const bool 
     if (!m.Contains(aControllerIndex))
         return;
 
-    assert(m.list[aControllerIndex].modelToggle != nullptr);
-    m.list[aControllerIndex].modelToggle->ToggleAll(aVisible);
+    if (m.list[aControllerIndex].modelToggle)
+        m.list[aControllerIndex].modelToggle->ToggleAll(aVisible);
 }
 
 void
