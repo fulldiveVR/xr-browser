@@ -100,7 +100,7 @@
     <string name="keyboard_mode_change" translatable="false">ABC</string>
     <string name="keyboard_symbol" translatable="false">%&amp;=</string>
     <string name="ellipsis" translatable="false">…</string>
-    <string name="release_notes_url" translatable="false">https://github.com/MozillaReality/FirefoxReality/wiki/Release-notes-for-version-%1$s</string>
+    <string name="release_notes_url" translatable="false">https://wolvic.com/blog/release_%1$s</string>
 
     <string name="pinyin_spacebar_selection" translatable="false">选定</string>
     <string name="pinyin_spacebar_space" translatable="false">空格</string>
@@ -216,5 +216,8 @@
     <!-- Phone UI links -->
     <string name="hvr_learn_more_url" translatable="false">https://consumer.huawei.com/cn/wearables/vr-glass/</string>
     <string name="landing_page_url" translatable="false">https://wolvic.com/en/welcome/</string>
+
+    <!-- Shared preferences key to store the list of installed Web apps (JSON string) -->
+    <string name="settings_key_web_apps_data" translatable="false">settings_key_web_apps_data</string>
 
 </resources>

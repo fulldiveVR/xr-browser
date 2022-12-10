@@ -1,4 +1,5 @@
 #include "OpenXRInputSource.h"
+#include "OpenXRExtensions.h"
 #include <unordered_set>
 
 namespace crow {
@@ -32,6 +33,8 @@ OpenXRInputSource::~OpenXRInputSource()
         xrDestroySpace(mGripSpace);
     if (mPointerSpace != XR_NULL_HANDLE)
         xrDestroySpace(mPointerSpace);
+    if (mHandTracker != XR_NULL_HANDLE)
+        OpenXRExtensions::sXrDestroyHandTrackerEXT(mHandTracker);
 }
 
 XrResult OpenXRInputSource::Initialize()
@@ -93,6 +96,60 @@ XrResult OpenXRInputSource::Initialize()
           RETURN_IF_XR_FAILED(mActionSet.GetOrCreateAction(XR_ACTION_TYPE_FLOAT_INPUT, name, static_cast<OpenXRHandFlags>(item.second), axisAction));
         }
         mAxisActions.emplace(item.first, axisAction);
+    }
+
+    // Initialize hand tracking, if supported
+    if (OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME) &&
+            OpenXRExtensions::sXrCreateHandTrackerEXT != nullptr) {
+        XrHandTrackerCreateInfoEXT handTrackerInfo{XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT};
+        handTrackerInfo.hand = (mHandeness == OpenXRHandFlags::Right) ? XR_HAND_RIGHT_EXT : XR_HAND_LEFT_EXT;
+        handTrackerInfo.handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT;
+
+        RETURN_IF_XR_FAILED(OpenXRExtensions::sXrCreateHandTrackerEXT(mSession, &handTrackerInfo,
+                                                                      &mHandTracker));
+
+        if (OpenXRExtensions::IsExtensionSupported(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME) &&
+                OpenXRExtensions::sXrGetHandMeshFB != XR_NULL_HANDLE) {
+            XrHandTrackingMeshFB mesh = { XR_TYPE_HAND_TRACKING_MESH_FB };
+            // Figure out sizes first
+            mesh.jointCapacityInput = 0;
+            mesh.vertexCapacityInput = 0;
+            mesh.indexCapacityInput = 0;
+            CHECK_XRCMD(OpenXRExtensions::sXrGetHandMeshFB(mHandTracker, &mesh));
+            mesh.jointCapacityInput = mesh.jointCountOutput;
+            mesh.vertexCapacityInput = mesh.vertexCountOutput;
+            mesh.indexCapacityInput = mesh.indexCountOutput;
+
+            // Skeleton
+            mHandMesh.jointCount = mesh.jointCountOutput;
+            mHandMesh.jointPoses.resize(mesh.jointCountOutput);
+            mHandMesh.jointParents.resize(mesh.jointCountOutput);
+            mHandMesh.jointRadii.resize(mesh.jointCountOutput);
+            mesh.jointBindPoses = mHandMesh.jointPoses.data();
+            mesh.jointParents = mHandMesh.jointParents.data();
+            mesh.jointRadii = mHandMesh.jointRadii.data();
+            // Vertex
+            mHandMesh.vertexCount = mesh.vertexCountOutput;
+            mHandMesh.vertexPositions.resize(mesh.vertexCountOutput);
+            mHandMesh.vertexNormals.resize(mesh.vertexCountOutput);
+            mHandMesh.vertexUVs.resize(mesh.vertexCountOutput);
+            mHandMesh.vertexBlendIndices.resize(mesh.vertexCountOutput);
+            mHandMesh.vertexBlendWeights.resize(mesh.vertexCountOutput);
+            mesh.vertexPositions = mHandMesh.vertexPositions.data();
+            mesh.vertexNormals = mHandMesh.vertexNormals.data();
+            mesh.vertexUVs = mHandMesh.vertexUVs.data();
+            mesh.vertexBlendIndices = mHandMesh.vertexBlendIndices.data();
+            mesh.vertexBlendWeights = mHandMesh.vertexBlendWeights.data();
+            // Index
+            mHandMesh.indexCount = mesh.indexCountOutput;
+            mHandMesh.indices.resize(mesh.indexCountOutput);
+            mesh.indices = mHandMesh.indices.data();
+
+            // Now get the actual mesh
+            RETURN_IF_XR_FAILED(OpenXRExtensions::sXrGetHandMeshFB(mHandTracker, &mesh));
+            mHasHandMesh = true;
+            VRB_LOG("xrGetHandMeshFB: %u, %u, %u", mHandMesh.jointCount, mHandMesh.vertexCount, mHandMesh.indexCount);
+        }
     }
 
     return XR_SUCCESS;
@@ -423,6 +480,105 @@ void OpenXRInputSource::UpdateHaptics(ControllerDelegate &delegate)
     CHECK_XRCMD(applyHapticFeedback(mHapticAction, duration, XR_FREQUENCY_UNSPECIFIED, pulseIntensity));
 }
 
+bool OpenXRInputSource::GetHandTrackingInfo(const XrFrameState& frameState, XrSpace localSpace) {
+    if (OpenXRExtensions::sXrLocateHandJointsEXT == XR_NULL_HANDLE || mHandTracker == XR_NULL_HANDLE)
+        return false;
+
+    // @FIXME: We currently require XR_FB_hand_tracking_aim to show beam and pointer target
+    if (!OpenXRExtensions::IsExtensionSupported(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME))
+        return false;
+
+    mHasHandJoints = false;
+
+    // Update hand locations
+    XrHandJointsLocateInfoEXT locateInfo { XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT };
+    locateInfo.baseSpace = localSpace;
+    locateInfo.time = frameState.predictedDisplayTime;
+
+    mAimState.status = 0;
+    mAimState.next = XR_NULL_HANDLE;
+
+    XrHandJointLocationsEXT jointLocations { XR_TYPE_HAND_JOINT_LOCATIONS_EXT };
+    jointLocations.jointCount = XR_HAND_JOINT_COUNT_EXT;
+    jointLocations.jointLocations = mHandJoints.data();
+    jointLocations.next = &mAimState;
+
+    CHECK_XRCMD(OpenXRExtensions::sXrLocateHandJointsEXT(mHandTracker, &locateInfo, &jointLocations));
+    mHasHandJoints = jointLocations.isActive;
+    mHasAimState = (mAimState.status & XR_HAND_TRACKING_AIM_VALID_BIT_FB) != 0;
+
+    return mHasHandJoints && mHasAimState;
+}
+
+void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode, ControllerDelegate& delegate)
+{
+    if ((mAimState.status & XR_HAND_TRACKING_AIM_SYSTEM_GESTURE_BIT_FB) != 0) {
+        delegate.SetEnabled(mIndex, false);
+        return;
+    }
+
+    delegate.SetEnabled(mIndex, true);
+    delegate.SetModelVisible(mIndex, false);
+
+    XrSpaceLocation poseLocation { XR_TYPE_SPACE_LOCATION };
+    poseLocation.pose = mAimState.aimPose;
+
+    vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);
+    if (renderMode == device::RenderMode::StandAlone)
+        pointerTransform.TranslateInPlace(kAverageHeight);
+
+    // On Quest devices, hand pose returned by XR_FB_hand_tracking_aim appears rotated
+    // on the Z-axis relative to the corresponding pose of the controllers, and the
+    // rotation is different for each hand. So here correct the pose by an angle that
+    // was obtained empirically for each hand.
+    float correctionAngle = (mHandeness == OpenXRHandFlags::Left) ? M_PI_2 : M_PI_4 * 3/2;
+    auto correctionMatrix = vrb::Matrix::Rotation(vrb::Vector(0.0, 0.0, 1.0),
+                                                  correctionAngle);
+    vrb::Matrix correctedTransform = pointerTransform.PostMultiply(correctionMatrix);
+
+    delegate.SetTransform(mIndex, correctedTransform);
+    delegate.SetImmersiveBeamTransform(mIndex, correctedTransform);
+    delegate.SetBeamTransform(mIndex, vrb::Matrix::Identity());
+
+    device::CapabilityFlags flags = device::Orientation | device::Position | device::GripSpacePosition;
+    delegate.SetCapabilityFlags(mIndex, flags);
+
+    // Select action
+    bool indexPinching = (mAimState.status & XR_HAND_TRACKING_AIM_INDEX_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_TRIGGER,
+                            device::kImmersiveButtonTrigger, indexPinching,
+                            indexPinching, 1.0);
+
+    if (renderMode == device::RenderMode::Immersive && indexPinching != selectActionStarted) {
+        selectActionStarted = indexPinching;
+        if (selectActionStarted) {
+            delegate.SetSelectActionStart(mIndex);
+        } else {
+            delegate.SetSelectActionStop(mIndex);
+        }
+    }
+
+    // Squeeze action
+    bool middlePinching = (mAimState.status & XR_HAND_TRACKING_AIM_MIDDLE_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_SQUEEZE,
+                            device::kImmersiveButtonSqueeze, middlePinching,
+                            middlePinching, 1.0);
+
+    if (renderMode == device::RenderMode::Immersive && middlePinching != squeezeActionStarted) {
+        squeezeActionStarted = middlePinching;
+        if (squeezeActionStarted) {
+            delegate.SetSqueezeActionStart(mIndex);
+        } else {
+            delegate.SetSqueezeActionStop(mIndex);
+        }
+    }
+
+    // Menu button
+    bool ringPinching = (mAimState.status & XR_HAND_TRACKING_AIM_RING_PINCHING_BIT_FB) != 0;
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_APP, -1, ringPinching,
+                            ringPinching, 1.0);
+}
+
 void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, float offsetY, device::RenderMode renderMode, ControllerDelegate& delegate)
 {
     if (!mActiveMapping) {
@@ -447,6 +603,12 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
       CHECK_XRCMD(CreateActionSpace(mPointerAction, mPointerSpace));
     }
 
+    // If hand tracking is active, use it to emulate the controller.
+    if (GetHandTrackingInfo(frameState, localSpace)) {
+        EmulateControllerFromHand(renderMode, delegate);
+        return;
+    }
+
     // Pose transforms.
     bool isPoseActive { false };
     XrSpaceLocation poseLocation { XR_TYPE_SPACE_LOCATION };
@@ -464,6 +626,7 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
     poseLocation.pose.position.y += offsetY;
 
     delegate.SetEnabled(mIndex, true);
+    delegate.SetModelVisible(mIndex, true);
 
     device::CapabilityFlags flags = device::Orientation;
     vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);

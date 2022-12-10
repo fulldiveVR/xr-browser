@@ -4,7 +4,7 @@
 
 name: CI
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        flavour: [assembleOculusvrArm64World, assembleHvrArm64World]
+        flavour: [assembleOculusvrArm64World, assembleHvrArm64World, assemblePicoxrArm64World]
 
     steps:
       - name: Checkout Wolvic
@@ -22,13 +22,12 @@ jobs:
 
       # Inspired by https://stackoverflow.com/questions/60679609/github-action-to-simply-cat-a-file-to-an-output
       - name: Read wolvic third parties SHA
-        id: getsha
-        run: echo "::set-output name=sha::$(cat third_party_hash)"
+        run: echo "third_party_sha=$(cat third_party_hash)" >> $GITHUB_ENV
 
       - name: Checkout third parties
         uses: actions/checkout@v2
         with:
-          ref: ${{ steps.getsha.outputs.sha }}
+          ref: ${{ env.third_party_sha }}
           repository: Igalia/wolvic-third-parties
           token: ${{ secrets.THIRD_PARTY_PAT }}
           path: 'third_party'

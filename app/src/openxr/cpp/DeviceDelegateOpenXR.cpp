@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <array>
+#include <algorithm>
 #include <cstdlib>
 #include <unistd.h>
 #include <string.h>
@@ -95,8 +96,32 @@ struct DeviceDelegateOpenXR::State {
   std::vector<const XrCompositionLayerBaseHeader*> frameEndLayers;
   std::function<void()> controllersReadyCallback;
   std::optional<XrPosef> firstPose;
+  bool mHandTrackingSupported = false;
+
+  bool IsPositionTrackingSupported() {
+      CHECK(system != XR_NULL_SYSTEM_ID);
+      CHECK(instance != XR_NULL_HANDLE);
+      return systemProperties.trackingProperties.positionTracking == XR_TRUE;
+  }
+
+  // This might require more sophisticated code to properly detect specific hardware. That was
+  // easy to do with propietary SDKs but it's a bit more difficult with OpenXR.
+  void InitializeDeviceType() {
+      VRB_LOG("Initializing device %s from vendor %d", systemProperties.systemName, systemProperties.vendorId);
+#if OCULUSVR
+      deviceType = device::OculusQuest2;
+#elif HVR
+      deviceType = IsPositionTrackingSupported() ? device::HVR6DoF : device::HVR3DoF;
+#elif PICOXR
+      deviceType = device::PicoXR;
+#endif
+  }
 
   void Initialize() {
+#ifdef PICOXR
+    deviceType = device::PicoXR;
+#endif
+
     vrb::RenderContextPtr localContext = context.lock();
     elbow = ElbowModel::Create();
     for (int i = 0; i < 2; ++i) {
@@ -104,8 +129,8 @@ struct DeviceDelegateOpenXR::State {
     }
     layersEnabled = VRBrowser::AreLayersEnabled();
 
-#ifdef OCULUSVR
-    // Adhoc loader required for OpenXR on Oculus
+#if defined(OCULUSVR) || defined(PICOXR)
+    // Adhoc loader required for OpenXR on Oculus and Pico
     PFN_xrInitializeLoaderKHR initializeLoaderKHR;
     CHECK_XRCMD(xrGetInstanceProcAddr(nullptr, "xrInitializeLoaderKHR", reinterpret_cast<PFN_xrVoidFunction*>(&initializeLoaderKHR)));
     XrLoaderInitInfoAndroidKHR loaderData;
@@ -134,9 +159,21 @@ struct DeviceDelegateOpenXR::State {
     if (OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME)) {
       extensions.push_back(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);
     }
+    if (OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
+        extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
+        if (OpenXRExtensions::IsExtensionSupported(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME)) {
+            extensions.push_back(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
+        }
+        if (OpenXRExtensions::IsExtensionSupported(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME)) {
+            extensions.push_back(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME);
+        }
+    }
 #ifdef OCULUSVR
     if (OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME)) {
       extensions.push_back(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME);
+    }
+    if (OpenXRExtensions::IsExtensionSupported(XR_FB_COMPOSITION_LAYER_IMAGE_LAYOUT_EXTENSION_NAME)) {
+      extensions.push_back(XR_FB_COMPOSITION_LAYER_IMAGE_LAYOUT_EXTENSION_NAME);
     }
 #endif
 
@@ -149,7 +186,7 @@ struct DeviceDelegateOpenXR::State {
     createInfo.next = (XrBaseInStructure*)&java;
     createInfo.enabledExtensionCount = (uint32_t)extensions.size();
     createInfo.enabledExtensionNames = extensions.data();
-    strcpy(createInfo.applicationInfo.applicationName, "Firefox Reality");
+    strcpy(createInfo.applicationInfo.applicationName, "Wolvic");
     createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
 
     CHECK_XRCMD(xrCreateInstance(&createInfo, &instance));
@@ -169,9 +206,22 @@ struct DeviceDelegateOpenXR::State {
     CHECK_XRCMD(xrGetSystem(instance, &systemInfo, &system));
     CHECK_MSG(system != XR_NULL_SYSTEM_ID, "Failed to initialize XRSystem");
 
+    // If hand tracking extension is present, query whether the runtime actually supports it
+    XrSystemHandTrackingPropertiesEXT handTrackingProperties{XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT};
+    handTrackingProperties.supportsHandTracking = XR_FALSE;
+    if (OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
+        handTrackingProperties.next = systemProperties.next;
+        systemProperties.next = &handTrackingProperties;
+    }
+
     // Retrieve system info
     CHECK_XRCMD(xrGetSystemProperties(instance, system, &systemProperties))
     VRB_LOG("OpenXR system name: %s", systemProperties.systemName);
+
+    mHandTrackingSupported = handTrackingProperties.supportsHandTracking;
+    VRB_LOG("OpenXR runtime %s hand tracking", mHandTrackingSupported ? "does support" : "doesn't support");
+
+    InitializeDeviceType();
   }
 
   // xrGet*GraphicsRequirementsKHR check must be called prior to xrCreateSession
@@ -217,6 +267,19 @@ struct DeviceDelegateOpenXR::State {
     CHECK_MSG(viewCount > 0, "OpenXR unexpected viewCount");
     viewConfig.resize(viewCount, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
     CHECK_XRCMD(xrEnumerateViewConfigurationViews(instance, system, viewConfigType, viewCount, &viewCount, viewConfig.data()));
+
+#ifdef PICOXR
+    // The Pico 4 is much more capable than it advertises via OpenXR, and the primary device used
+    // with Pico XR builds. We thus bump resulutions by 1.4 for a drastic improvement in image clarity.
+    if (viewCount > 0) {
+      viewConfig.front().recommendedImageRectWidth = std::min<unsigned int>(
+          viewConfig.front().maxImageRectWidth,
+          viewConfig.front().recommendedImageRectWidth * 1.4f);
+      viewConfig.front().recommendedImageRectHeight = std::min<unsigned int>(
+          viewConfig.front().maxImageRectHeight,
+          viewConfig.front().recommendedImageRectHeight * 1.4f);
+    }
+#endif
 
     // Cache view buffer (used in xrLocateViews)
     views.resize(viewCount, {XR_TYPE_VIEW});
@@ -601,7 +664,7 @@ DeviceDelegateOpenXR::GetControllerModelName(const int32_t aModelIndex) const {
 bool
 DeviceDelegateOpenXR::IsPositionTrackingSupported() const {
   // returns true for 6DoF controllers
-  return m.systemProperties.trackingProperties.positionTracking == XR_TRUE;
+  return m.IsPositionTrackingSupported();
 }
 
 void
@@ -674,7 +737,7 @@ DeviceDelegateOpenXR::StartFrame(const FramePrediction aPrediction) {
     return;
   }
 
-#if OCULUSVR
+#if OCULUSVR || PICOXR
   // Fix brigthness issue.
   glDisable(GL_FRAMEBUFFER_SRGB_EXT);
 #endif
@@ -1037,7 +1100,13 @@ DeviceDelegateOpenXR::CreateLayerEquirect(const VRLayerPtr &aSource) {
   if (m.equirectLayer) {
     m.equirectLayer->Destroy();
   }
-  m.equirectLayer = OpenXRLayerEquirect::Create(result, source);
+  bool verticalFlip = false;
+#ifdef OCULUSVR
+    if (OpenXRExtensions::IsExtensionSupported(XR_FB_COMPOSITION_LAYER_IMAGE_LAYOUT_EXTENSION_NAME)) {
+        verticalFlip = true;
+    }
+#endif
+  m.equirectLayer = OpenXRLayerEquirect::Create(result, source, verticalFlip);
   if (m.session != XR_NULL_HANDLE) {
     vrb::RenderContextPtr context = m.context.lock();
     m.equirectLayer->Init(m.javaContext->env, m.session, context);
@@ -1073,9 +1142,11 @@ DeviceDelegateOpenXR::EnterVR(const crow::BrowserEGLContext& aEGLContext) {
   m.firstPose = std::nullopt;
 
   if (m.session != XR_NULL_HANDLE && m.graphicsBinding.context == aEGLContext.Context()) {
+#if HVR
     // Session already created, call begin again. This can happen for example in HVR when reentering
     // the security zone, because HVR forces us to stop and end the session when exiting.
     m.BeginXRSession();
+#endif
     ProcessEvents();
     return;
   }

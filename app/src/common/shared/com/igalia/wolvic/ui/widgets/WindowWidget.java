@@ -71,6 +71,7 @@ import com.igalia.wolvic.utils.UrlUtils;
 import com.igalia.wolvic.utils.ViewUtils;
 
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.net.URLConnection;
@@ -1910,6 +1911,7 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
         mViewModel.setIsDrmUsed(false);
         mViewModel.setIsMediaAvailable(false);
         mViewModel.setIsMediaPlaying(false);
+        mViewModel.setIsWebApp(false);
 
         if (StringUtils.isEmpty(url)) {
             mViewModel.setIsBookmarked(false);
@@ -1920,6 +1922,11 @@ public class WindowWidget extends UIWidget implements SessionChangeListener,
                 return null;
             });
         }
+    }
+
+    @Override
+    public void onWebAppManifest(@NonNull WSession session, @NonNull JSONObject manifest) {
+        mViewModel.setIsWebApp(true);
     }
 
     @Override

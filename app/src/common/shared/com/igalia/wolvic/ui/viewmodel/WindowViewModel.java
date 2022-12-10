@@ -52,6 +52,7 @@ public class WindowViewModel extends AndroidViewModel {
     private MutableLiveData<ObservableBoolean> isLoading;
     private MutableLiveData<ObservableBoolean> isMicrophoneEnabled;
     private MutableLiveData<ObservableBoolean> isBookmarked;
+    private MutableLiveData<ObservableBoolean> isWebApp;
     private MutableLiveData<ObservableBoolean> isFocused;
     private MutableLiveData<ObservableBoolean> isUrlEmpty;
     private MutableLiveData<ObservableBoolean> isPopUpAvailable;
@@ -130,6 +131,7 @@ public class WindowViewModel extends AndroidViewModel {
         isLoading = new MutableLiveData<>(new ObservableBoolean(false));
         isMicrophoneEnabled = new MutableLiveData<>(new ObservableBoolean(true));
         isBookmarked = new MutableLiveData<>(new ObservableBoolean(false));
+        isWebApp = new MutableLiveData<>(new ObservableBoolean(false));
         isFocused = new MutableLiveData<>(new ObservableBoolean(false));
         isUrlEmpty = new MutableLiveData<>(new ObservableBoolean(true));
         isPopUpAvailable = new MutableLiveData<>(new ObservableBoolean(false));
@@ -613,6 +615,15 @@ public class WindowViewModel extends AndroidViewModel {
 
     public void setIsBookmarked(boolean isBookmarked) {
         this.isBookmarked.postValue(new ObservableBoolean(isBookmarked));
+    }
+
+    @NonNull
+    public MutableLiveData<ObservableBoolean> getIsWebApp() {
+        return isWebApp;
+    }
+
+    public void setIsWebApp(boolean isWebApp) {
+        this.isWebApp.postValue(new ObservableBoolean(isWebApp));
     }
 
     @NonNull
