@@ -9,25 +9,27 @@ mkdir -p third_party/wavesdk/build
 
 Download 5.0.2 VIVE SDK from [@HTC VIVE Native SDK download archive](https://developer.vive.com/resources/vive-wave/download/archive/)
 ```bash
-curl -o ./third_party/wavesdk/wave_5.0.2_native.zip  https://dl.vive.com/SDK/wave/wave_5.0.2_native.zip
+curl -o ./third_party/wavesdk/wave_5.0.3_native.zip  https://dl.vive.com/SDK/wave/wave_5.0.3_native.zip
 ```
 
 Unzip SDK
 ```bash
-unzip ./third_party/wavesdk/wave_5.0.2_native.zip -d ./third_party/wavesdk
+unzip ./third_party/wavesdk/wave_5.0.3_native.zip -d ./third_party/wavesdk
 ```
 
-Unpack ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.9.2-u16/wvr_client-5.0.2-u16.aar into ./third_party/wavesdk/build (change .arr to .zip and use unzip)
+Unpack ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.3-u05/wvr_client-5.0.3-u05.aar into ./third_party/wavesdk/build (change .arr to .zip and use unzip)
 
 ```bash
-cp ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.2-u16/wvr_client-5.0.2-u16.aar ./third_party/wavesdk/build/wvr_client-5.0.2-u16.zip
-unzip ./third_party/wavesdk/build/wvr_client-5.0.2-u16.zip -d ./third_party/wavesdk/build/wvr_client-5.0.2-u16/
+cp ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.3-u05/wvr_client-5.0.3-u05.aar ./third_party/wavesdk/build/wvr_client-5.0.3-u05.zip
+unzip ./third_party/wavesdk/build/wvr_client-5.0.3-u05.zip -d ./third_party/wavesdk/build/wvr_client-5.0.3-u05/
 ```
 
-Check file `./third_party/wavesdk/build/wvr_client-5.0.2-u16/jni/arm64-v8a/libwvr_api.so` exist
+Check file `./third_party/wavesdk/build/wvr_client-5.0.3-u05/jni/arm64-v8a/libwvr_api.so` exist
 ```bash
-[ ! -f ./third_party/wavesdk/build/wvr_client-5.0.2-u16/jni/arm64-v8a/libwvr_api.so ] && echo ">>> Not found"
+[ ! -f ./third_party/wavesdk/build/wvr_client-5.0.3-u05/jni/arm64-v8a/libwvr_api.so ] && echo ">>> Not found"
 ```
+
+Update `./version.gradle` set `versions.wavevr = "5.0.3-u05"`
 
 Download VBR repo into ./app/src/main/cpp/vrb
 
@@ -49,7 +51,7 @@ and place into ./app/src/main/cpp/vrb/third_party/gliml
 
 ```bash
 ./gradlew
-./gradlew assembleWavevrArm64
+./gradlew assembleWavevrArm64WorldDebug
 ```
 
 ## result APK
