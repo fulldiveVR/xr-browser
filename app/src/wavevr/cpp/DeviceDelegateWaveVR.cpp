@@ -23,7 +23,9 @@
 #include "vrb/Geometry.h"
 #include "vrb/Group.h"
 #include "vrb/TextureGL.h"
-#include "../../main/cpp/DeviceDelegate.h"
+#include "DeviceDelegate.h"
+#include "HandConstant.h"
+
 #include <array>
 #include <vector>
 #include <mutex>
@@ -37,6 +39,9 @@
 #include <wvr/wvr_events.h>
 #include <wvr/wvr_arena.h>
 #include <wvr/wvr_ctrller_render_model.h>
+
+#include <wvr/wvr_hand.h>
+#include <wvr/wvr_hand_render_model.h>
 
 namespace crow {
 
@@ -96,6 +101,8 @@ struct DeviceDelegateWaveVR::State {
   vrb::CameraEyePtr cameras[2];
   uint32_t renderWidth;
   uint32_t renderHeight;
+
+  bool isHandTrackingEnabled = false;
 
   WVR_DevicePosePair_t devicePairs[WVR_DEVICE_COUNT_LEVEL_1];
   ElbowModelPtr elbow;
@@ -230,6 +237,30 @@ struct DeviceDelegateWaveVR::State {
     WVR_SetInputRequest(WVR_DeviceType_Controller_Right, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
     WVR_SetInputRequest(WVR_DeviceType_Controller_Left, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
 
+
+    // Hand tracking
+    WVR_HandTrackerInfo_t info = {};
+
+    if (info.jointMappingArray != nullptr) delete[] info.jointMappingArray;
+    if (info.jointValidFlagArray != nullptr) delete[] info.jointValidFlagArray;
+
+    info.jointMappingArray = new WVR_HandJoint[info.jointCount];
+    info.jointValidFlagArray = new uint64_t[info.jointCount];
+
+    memset(info.jointMappingArray, 0, sizeof(WVR_HandJoint) * info.jointCount);
+    memset(info.jointValidFlagArray, 0, sizeof(uint64_t) * info.jointCount);
+
+    VRB_ERROR(">>> Before hand tracking");
+
+    if (WVR_StartHandTracking(WVR_HandTrackerType_Natural) == WVR_Success) {
+        VRB_ERROR(">>> WVR_StartHandTracking success!");
+        isHandTrackingEnabled = true;
+    } else {
+        VRB_ERROR(">>> WVR_StartHandTracking failed!");
+    }
+
+    VRB_ERROR(">>> After hand tracking");
+
     elbow = ElbowModel::Create();
   }
 
@@ -271,6 +302,7 @@ struct DeviceDelegateWaveVR::State {
   }
 
   void Shutdown() {
+    WVR_StopHandTracking(WVR_HandTrackerType_Natural);
     ReleaseTextureQueues();
   }
 
@@ -982,6 +1014,35 @@ DeviceDelegateWaveVR::BindEye(const device::Eye aWhich) {
 
 void
 DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
+  if(m.isHandTrackingEnabled) {
+      VRB_ERROR(">>> WVR_GetHandTrackingData start");
+
+      WVR_HandTrackingData skeleton = {};
+      WVR_HandPoseData pose = {};
+      if (WVR_GetHandTrackingData(WVR_HandTrackerType_Natural,
+                              WVR_HandModelType_WithoutController,
+                              WVR_PoseOriginModel_OriginOnHead,
+                              &skeleton, &pose) == WVR_Success) {
+          // get hand tracking data success
+          VRB_ERROR(">>> WVR_GetHandTrackingData success");
+          switch (pose.left.base.type) {
+              default:
+                  VRB_ERROR("no special pose");
+                  break;
+              case WVR_HandPoseType_Pinch:
+                  VRB_ERROR("The left has special pose that is pinch");
+
+                  break;
+              case WVR_HandPoseType_Hold:
+                  VRB_ERROR("The left has special pose that is hold");
+                  break;
+          }
+      } else {
+          // start hand tracking failed!
+          VRB_ERROR(">>> WVR_GetHandTrackingData fail");
+      }
+  }
+
   if (m.currentFBO) {
     m.currentFBO->Unbind();
     m.currentFBO = nullptr;
@@ -1013,6 +1074,19 @@ vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) 
   }
 
   return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
+      WVR_HandRenderModel_t *renderModel = nullptr;
+      WVR_GetCurrentNaturalHandModel(&renderModel);
+
+      if (renderModel != nullptr) {
+          mHandObjs[Hand_Left]->loadModel(&(*renderModel).left);
+          mHandObjs[Hand_Right]->loadModel(&(*renderModel).right);
+          mHandAlphaTex = Texture::loadTextureFromBitmapWithoutCached((*renderModel).handAlphaTex);
+          mHandObjs[Hand_Left]->setTexture(mHandAlphaTex);
+          mHandObjs[Hand_Right]->setTexture(mHandAlphaTex);
+
+          WVR_ReleaseNatureHandModel(&renderModel);
+      }
+
       vrb::GroupPtr root = vrb::Group::Create(aContext);
       auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex);
 
