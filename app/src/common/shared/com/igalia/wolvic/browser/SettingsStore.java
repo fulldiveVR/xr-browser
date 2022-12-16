@@ -905,7 +905,9 @@ public class SettingsStore {
     }
 
     public boolean isTermsServiceAccepted() {
-        return mPrefs.getBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), false);
+        return true;
+        // FD
+        // return mPrefs.getBoolean(mContext.getString(R.string.settings_key_terms_service_accepted), false);
     }
 
     public void setPrivacyPolicyAccepted(boolean isAccepted) {
@@ -915,7 +917,9 @@ public class SettingsStore {
     }
 
     public boolean isPrivacyPolicyAccepted() {
-        return mPrefs.getBoolean(mContext.getString(R.string.settings_key_privacy_policy_accepted), false);
+        return true;
+        // FD
+        // return mPrefs.getBoolean(mContext.getString(R.string.settings_key_privacy_policy_accepted), false);
     }
 
     public void setWebAppsData(String aWebAppsData) {
