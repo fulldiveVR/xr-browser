@@ -4,10 +4,14 @@
 #include "vrb/Forward.h"
 #include "vrb/MacroUtils.h"
 #include "DeviceDelegate.h"
+#include "vrb/Vector.h"
 #include <memory>
+#include <wvr/wvr_hand.h>
+
+const uint32_t kHandCount = 2;
+const uint32_t kJointCount = 26;
 
 namespace crow {
-
 class DeviceDelegateWaveVR;
 typedef std::shared_ptr<DeviceDelegateWaveVR> DeviceDelegateWaveVRPtr;
 
