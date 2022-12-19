@@ -12,16 +12,15 @@
 #include <wvr/wvr_hand.h>
 #include <wvr/wvr_device.h>
 
-//#include "DrawEnum.h"
+#include "DrawEnum.h"
 
-//#include "../shared/Matrices.h"
-//#include "../object/Mesh.h"
-//#include "../object/Texture.h"
-//#include "../object/Shader.h"
-//#include "Axes.h"
+#include "shared/Matrices.h"
+#include "object/Mesh.h"
+#include "object/Texture.h"
+#include "object/Shader.h"
 
-//#include "HandConstant.h"
-//#include "HandObj.h"
+#include "HandConstant.h"
+#include "HandObj.h"
 
 class HandManager
 {
@@ -31,12 +30,12 @@ public:
 public:
     void onCreate();
     void onDestroy();
-//public:
-//    void updateAndRender(
-        //DrawModeEnum iMode, size_t iEyeID,
-//        const Matrix4 iProjs[DrawMode_MaxModeMumber],
-//        const Matrix4 iEyes[DrawMode_MaxModeMumber],
-//        const Matrix4 &iView);
+public:
+    void updateAndRender(
+        DrawModeEnum iMode, size_t iEyeID,
+        const Matrix4 iProjs[DrawMode_MaxModeMumber],
+        const Matrix4 iEyes[DrawMode_MaxModeMumber],
+        const Matrix4 &iView);
 public:
     void handleHandTrackingMechanism();
 protected:
@@ -54,18 +53,18 @@ protected:
     WVR_HandTrackingData_t mHandTrackingData;
     WVR_HandPoseData_t mHandPoseData;
     std::atomic<bool> mStartFlag;
-//protected:
-//    bool mIsPrintedSkeErrLog[Hand_MaxNumber];
-//protected:
-//    Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
-//    Matrix4 mHandPoseMats[Hand_MaxNumber];
-    bool mIsHandPoseValids[2];
-//protected:
-//    Matrix4 mHandRayMats[Hand_MaxNumber];
 protected:
-//    HandObj *mHandObjs[2];
-//    Texture *mHandAlphaTex;
-//    Axes *mAxes;
+    bool mIsPrintedSkeErrLog[Hand_MaxNumber];
+protected:
+    Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
+    Matrix4 mHandPoseMats[Hand_MaxNumber];
+    bool mIsHandPoseValids[Hand_MaxNumber];
+protected:
+    Matrix4 mHandRayMats[Hand_MaxNumber];
+protected:
+    HandObj *mHandObjs[Hand_MaxNumber];
+    Texture *mHandAlphaTex;
+    Matrix4 mShift;
     bool mHandInitialized;
 protected:
     std::thread mLoadModelThread;

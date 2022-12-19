@@ -5,6 +5,7 @@
 #include "vrb/MacroUtils.h"
 #include "DeviceDelegate.h"
 #include "vrb/Vector.h"
+#include "shared/Matrices.h"
 #include <memory>
 #include <wvr/wvr_hand.h>
 
@@ -49,6 +50,16 @@ protected:
 private:
   State& m;
   VRB_NO_DEFAULTS(DeviceDelegateWaveVR)
+
+protected:
+    inline Matrix4 wvrmatrixConverter(const WVR_Matrix4f_t& mat) const {
+        return Matrix4(
+            mat.m[0][0], mat.m[1][0], mat.m[2][0], mat.m[3][0],
+            mat.m[0][1], mat.m[1][1], mat.m[2][1], mat.m[3][1],
+            mat.m[0][2], mat.m[1][2], mat.m[2][2], mat.m[3][2],
+            mat.m[0][3], mat.m[1][3], mat.m[2][3], mat.m[3][3]
+        );
+    }
 };
 
 } // namespace crow

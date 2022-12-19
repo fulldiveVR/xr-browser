@@ -26,6 +26,14 @@
 #include "DeviceDelegate.h"
 #include "HandConstant.h"
 
+#include "HandManager.h"
+
+#include "shared/Matrices.h"
+#include "object/Mesh.h"
+#include "object/Texture.h"
+#include "object/Shader.h"
+
+
 #include <array>
 #include <vector>
 #include <mutex>
@@ -166,44 +174,47 @@ struct DeviceDelegateWaveVR::State {
   bool isModelDataReady[2];
   std::mutex mCachedDataMutex[2];
 
+//    // Hand data
+//    HandTrackingStatus m_NaturalTrackerStatus = HandTrackingStatus::NOT_START;
+//    WVR_PoseOriginModel poseOrigin = WVR_PoseOriginModel_OriginOnHead;
+//
+//    UnityXRVector3 BONE_OFFSET_L = { 0, 0, 0 };
+//  	UnityXRVector3 BONE_OFFSET_R = { 0, 0, 0 };
+//
+//  	// Natural
+//  	bool m_EnableNaturalTracker;
+//  	bool hasNaturalTrackerInfo;
+//  	WVR_HandTrackerInfo_t m_NaturalTrackerInfo;
+//
+//  	bool hasNaturalTrackerData;
+//  	WVR_HandTrackingData_t m_NaturalHandTrackerData;
+//  	UnityXRVector3 s_JointPositionNaturalLeft[kJointCount], s_JointPositionNaturalRight[kJointCount];
+//  	UnityXRVector4 s_JointRotationNaturalLeft[kJointCount], s_JointRotationNaturalRight[kJointCount];
+//  	WVR_HandPoseData_t m_NaturalHandPoseData;
+//
+//  	UnityXRVector3 NaturalHandScaleL, NaturalWristLinearVelocityL, NaturalWristAngularVelocityL;
+//  	UnityXRVector3 NaturalHandScaleR, NaturalWristLinearVelocityR, NaturalWristAngularVelocityR;
+//
+//  	// Electronic
+//  	bool m_EnableElectronicTracker;
+//  	bool hasElectronicTrackerInfo;
+//  	WVR_HandTrackerInfo_t m_ElectronicTrackerInfo;
+//
+//  	bool hasElectronicTrackerData;
+//  	WVR_HandTrackingData_t m_ElectronicHandTrackerData;
+//  	UnityXRVector3 s_JointPositionElectronicLeft[kJointCount], s_JointPositionElectronicRight[kJointCount];
+//  	UnityXRVector4 s_JointRotationElectronicLeft[kJointCount], s_JointRotationElectronicRight[kJointCount];
+//  	WVR_HandPoseData_t m_ElectronicHandPoseData;
+//
+//  	UnityXRVector3 ElectronicHandScaleL, ElectronicWristLinearVelocityL, ElectronicWristAngularVelocityL;
+//  	UnityXRVector3 ElectronicHandScaleR, ElectronicWristLinearVelocityR, ElectronicWristAngularVelocityR;
+//
+//    int logCount = 0;
+//    bool printable = false;
+    Matrix4 mProjectionLeft;
+    Matrix4 mProjectionRight;
 
-    // Hand data
-    HandTrackingStatus m_NaturalTrackerStatus = HandTrackingStatus::NOT_START;
-    WVR_PoseOriginModel poseOrigin = WVR_PoseOriginModel_OriginOnHead;
-
-    UnityXRVector3 BONE_OFFSET_L = { 0, 0, 0 };
-  	UnityXRVector3 BONE_OFFSET_R = { 0, 0, 0 };
-
-  	// Natural
-  	bool m_EnableNaturalTracker;
-  	bool hasNaturalTrackerInfo;
-  	WVR_HandTrackerInfo_t m_NaturalTrackerInfo;
-
-  	bool hasNaturalTrackerData;
-  	WVR_HandTrackingData_t m_NaturalHandTrackerData;
-  	UnityXRVector3 s_JointPositionNaturalLeft[kJointCount], s_JointPositionNaturalRight[kJointCount];
-  	UnityXRVector4 s_JointRotationNaturalLeft[kJointCount], s_JointRotationNaturalRight[kJointCount];
-  	WVR_HandPoseData_t m_NaturalHandPoseData;
-
-  	UnityXRVector3 NaturalHandScaleL, NaturalWristLinearVelocityL, NaturalWristAngularVelocityL;
-  	UnityXRVector3 NaturalHandScaleR, NaturalWristLinearVelocityR, NaturalWristAngularVelocityR;
-
-  	// Electronic
-  	bool m_EnableElectronicTracker;
-  	bool hasElectronicTrackerInfo;
-  	WVR_HandTrackerInfo_t m_ElectronicTrackerInfo;
-
-  	bool hasElectronicTrackerData;
-  	WVR_HandTrackingData_t m_ElectronicHandTrackerData;
-  	UnityXRVector3 s_JointPositionElectronicLeft[kJointCount], s_JointPositionElectronicRight[kJointCount];
-  	UnityXRVector4 s_JointRotationElectronicLeft[kJointCount], s_JointRotationElectronicRight[kJointCount];
-  	WVR_HandPoseData_t m_ElectronicHandPoseData;
-
-  	UnityXRVector3 ElectronicHandScaleL, ElectronicWristLinearVelocityL, ElectronicWristAngularVelocityL;
-  	UnityXRVector3 ElectronicHandScaleR, ElectronicWristLinearVelocityR, ElectronicWristAngularVelocityR;
-
-    int logCount = 0;
-    bool printable = false;
+    HandManager *mHandManager;
 
   State()
       : isRunning(true)
@@ -270,7 +281,21 @@ struct DeviceDelegateWaveVR::State {
     }
   }
 
+    inline Matrix4 wvrmatrixConverter(const WVR_Matrix4f_t& mat) const {
+        return Matrix4(
+            mat.m[0][0], mat.m[1][0], mat.m[2][0], mat.m[3][0],
+            mat.m[0][1], mat.m[1][1], mat.m[2][1], mat.m[3][1],
+            mat.m[0][2], mat.m[1][2], mat.m[2][2], mat.m[3][2],
+            mat.m[0][3], mat.m[1][3], mat.m[2][3], mat.m[3][3]
+        );
+    }
+
   void InitializeCameras() {
+    mProjectionLeft = wvrmatrixConverter(
+                  WVR_GetProjection(WVR_Eye_Left, near, far));
+    mProjectionRight = wvrmatrixConverter(
+                  WVR_GetProjection(WVR_Eye_Right, near, far));
+
     for (WVR_Eye eye : {WVR_Eye_Left, WVR_Eye_Right}) {
       const device::Eye deviceEye = eye == WVR_Eye_Left ? device::Eye::Left : device::Eye::Right;
       vrb::Matrix eyeOffset = vrb::Matrix::FromRowMajor(WVR_GetTransformFromEyeToHead(eye, WVR_NumDoF_6DoF).m);
@@ -297,41 +322,41 @@ struct DeviceDelegateWaveVR::State {
     }
   }
 
-    void InitHandData()
-    {
-        m_EnableNaturalTracker = false;
-        hasNaturalTrackerInfo = false;
-        hasNaturalTrackerData = false;
-
-        m_EnableElectronicTracker = false;
-        hasElectronicTrackerInfo = false;
-        hasElectronicTrackerData = false;
-
-        m_NaturalTrackerInfo.jointMappingArray = nullptr;
-        m_NaturalTrackerInfo.jointValidFlagArray = nullptr;
-        m_NaturalTrackerInfo.pinchTHR = 0;
-        m_NaturalHandTrackerData.left.joints = nullptr;
-        m_NaturalHandTrackerData.right.joints = nullptr;
-
-        m_ElectronicTrackerInfo.jointMappingArray = nullptr;
-        m_ElectronicTrackerInfo.jointValidFlagArray = nullptr;
-        m_ElectronicTrackerInfo.pinchTHR = 0;
-        m_ElectronicHandTrackerData.left.joints = nullptr;
-        m_ElectronicHandTrackerData.right.joints = nullptr;
-
-        for (int i = 0; i < kJointCount; i++)
-        {
-            s_JointPositionNaturalLeft[i] = { 0, 0, 0 };
-            s_JointPositionNaturalRight[i] = { 0, 0, 0 };
-            s_JointRotationNaturalLeft[i] = { 0, 0, 0, 1 };
-            s_JointRotationNaturalRight[i] = { 0, 0, 0, 1 };
-
-            s_JointPositionElectronicLeft[i] = { 0, 0, 0 };
-            s_JointPositionElectronicRight[i] = { 0, 0, 0 };
-            s_JointRotationElectronicLeft[i] = { 0, 0, 0, 1 };
-            s_JointRotationElectronicRight[i] = { 0, 0, 0, 1 };
-        }
-    }
+//    void InitHandData()
+//    {
+//        m_EnableNaturalTracker = false;
+//        hasNaturalTrackerInfo = false;
+//        hasNaturalTrackerData = false;
+//
+//        m_EnableElectronicTracker = false;
+//        hasElectronicTrackerInfo = false;
+//        hasElectronicTrackerData = false;
+//
+//        m_NaturalTrackerInfo.jointMappingArray = nullptr;
+//        m_NaturalTrackerInfo.jointValidFlagArray = nullptr;
+//        m_NaturalTrackerInfo.pinchTHR = 0;
+//        m_NaturalHandTrackerData.left.joints = nullptr;
+//        m_NaturalHandTrackerData.right.joints = nullptr;
+//
+//        m_ElectronicTrackerInfo.jointMappingArray = nullptr;
+//        m_ElectronicTrackerInfo.jointValidFlagArray = nullptr;
+//        m_ElectronicTrackerInfo.pinchTHR = 0;
+//        m_ElectronicHandTrackerData.left.joints = nullptr;
+//        m_ElectronicHandTrackerData.right.joints = nullptr;
+//
+//        for (int i = 0; i < kJointCount; i++)
+//        {
+//            s_JointPositionNaturalLeft[i] = { 0, 0, 0 };
+//            s_JointPositionNaturalRight[i] = { 0, 0, 0 };
+//            s_JointRotationNaturalLeft[i] = { 0, 0, 0, 1 };
+//            s_JointRotationNaturalRight[i] = { 0, 0, 0, 1 };
+//
+//            s_JointPositionElectronicLeft[i] = { 0, 0, 0 };
+//            s_JointPositionElectronicRight[i] = { 0, 0, 0 };
+//            s_JointRotationElectronicLeft[i] = { 0, 0, 0, 1 };
+//            s_JointRotationElectronicRight[i] = { 0, 0, 0, 1 };
+//        }
+//    }
 
   void Initialize() {
     vrb::RenderContextPtr localContext = context.lock();
@@ -358,269 +383,265 @@ struct DeviceDelegateWaveVR::State {
     WVR_SetInputRequest(WVR_DeviceType_Controller_Right, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
     WVR_SetInputRequest(WVR_DeviceType_Controller_Left, inputIdAndTypes, sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
 
-
-    InitHandData();
-    StartHandTrackingLock(WVR_HandTrackerType_Natural);
-
     elbow = ElbowModel::Create();
   }
 
-    void TickHandData(WVR_PoseOriginModel origin)
-    {
-        logCount++;
-        logCount %= 500;
-        printable = (logCount == 0);
-    	poseOrigin = origin;
+//    void TickHandData(WVR_PoseOriginModel origin)
+//    {
+//        logCount++;
+//        logCount %= 500;
+//        printable = (logCount == 0);
+//    	poseOrigin = origin;
+//
+//    	/* ----------------------- Hand Tracking -----------------------*/
+//    	HandTrackingStatus natural_tracker_status = GetHandTrackingStatus(WVR_HandTrackerType_Natural);
+//    	if (natural_tracker_status == HandTrackingStatus::AVAILABLE)
+//    	{
+//    		// Calls GetHandJointCount one time after starting tracker.
+//    		if (!hasNaturalTrackerInfo)
+//    		{
+//    			WVR_Result result = WVR_GetHandJointCount(WVR_HandTrackerType::WVR_HandTrackerType_Natural, &m_NaturalTrackerInfo.jointCount);
+//    			if (result == WVR_Result::WVR_Success)
+//    			{
+//    				/// Initialize m_NaturalTrackerInfo
+//    				m_NaturalTrackerInfo.handModelTypeBitMask = 0;
+//    				if (m_NaturalTrackerInfo.jointMappingArray != nullptr)
+//    				{
+//    					delete[] m_NaturalTrackerInfo.jointMappingArray;
+//    					m_NaturalTrackerInfo.jointMappingArray = nullptr;
+//    				}
+//    				m_NaturalTrackerInfo.jointMappingArray = new WVR_HandJoint[m_NaturalTrackerInfo.jointCount];
+//
+//    				if (m_NaturalTrackerInfo.jointValidFlagArray != nullptr)
+//    				{
+//    					delete[] m_NaturalTrackerInfo.jointValidFlagArray;
+//    					m_NaturalTrackerInfo.jointValidFlagArray = nullptr;
+//    				}
+//    				m_NaturalTrackerInfo.jointValidFlagArray = new uint64_t[m_NaturalTrackerInfo.jointCount];
+//
+//    				m_NaturalTrackerInfo.pinchTHR = 0;
+//
+//    				hasNaturalTrackerInfo =
+//    					(WVR_GetHandTrackerInfo(WVR_HandTrackerType::WVR_HandTrackerType_Natural, &m_NaturalTrackerInfo) == WVR_Result::WVR_Success ? true : false);
+//
+//    				if (hasNaturalTrackerInfo)
+//    				{
+//    					/// Initialize m_NaturalHandTrackerData
+//    					m_NaturalHandTrackerData.timestamp = 0;
+//    					m_NaturalHandTrackerData.left.confidence = 0;
+//    					m_NaturalHandTrackerData.left.isValidPose = false;
+//    					m_NaturalHandTrackerData.left.jointCount = m_NaturalTrackerInfo.jointCount;
+//    					if (m_NaturalHandTrackerData.left.joints != nullptr)
+//    					{
+//    						delete[]m_NaturalHandTrackerData.left.joints;
+//    						m_NaturalHandTrackerData.left.joints = nullptr;
+//
+//    					}
+//    					m_NaturalHandTrackerData.left.joints = new WVR_Pose_t[m_NaturalTrackerInfo.jointCount];
+//    					m_NaturalHandTrackerData.left.scale.v[0] = 0;
+//    					m_NaturalHandTrackerData.left.scale.v[1] = 0;
+//    					m_NaturalHandTrackerData.left.scale.v[2] = 0;
+//
+//    					m_NaturalHandTrackerData.right.confidence = 0;
+//    					m_NaturalHandTrackerData.right.isValidPose = false;
+//    					m_NaturalHandTrackerData.right.jointCount = m_NaturalTrackerInfo.jointCount;
+//    					if (m_NaturalHandTrackerData.right.joints != nullptr)
+//    					{
+//    						delete[] m_NaturalHandTrackerData.right.joints;
+//    						m_NaturalHandTrackerData.right.joints = nullptr;
+//
+//    					}
+//    					m_NaturalHandTrackerData.right.joints = new WVR_Pose_t[m_NaturalTrackerInfo.jointCount];
+//    					m_NaturalHandTrackerData.right.scale.v[0] = 0;
+//    					m_NaturalHandTrackerData.right.scale.v[1] = 0;
+//    					m_NaturalHandTrackerData.right.scale.v[2] = 0;
+//
+//
+//    					/// Initialize m_NaturalHandPoseData
+//    					m_NaturalHandPoseData.timestamp = 0;
+//    					m_NaturalHandPoseData.left.base.type = WVR_HandPoseType::WVR_HandPoseType_Invalid;
+//    					m_NaturalHandPoseData.right.base.type = WVR_HandPoseType::WVR_HandPoseType_Invalid;
+//    				}
+//    			}
+//    		} // if (!hasNaturalTrackerInfo)
+//
+//    		// Calls GetHandTrackingData on each frame.
+//    		if (hasNaturalTrackerInfo &&
+//    			((m_NaturalTrackerInfo.handModelTypeBitMask & (uint64_t)WVR_HandModelType::WVR_HandModelType_WithoutController) != 0))
+//    		{
+//    			hasNaturalTrackerData = (
+//    				WVR_GetHandTrackingData(
+//    					WVR_HandTrackerType::WVR_HandTrackerType_Natural,
+//    					WVR_HandModelType::WVR_HandModelType_WithoutController,
+//    					poseOrigin,
+//    					&m_NaturalHandTrackerData,
+//    					&m_NaturalHandPoseData
+//    				) == WVR_Result::WVR_Success ? true : false);
+//
+//    			if (hasNaturalTrackerData)
+//    			{
+//    			    // m_NaturalHandPoseData contains pinch data
+//    			    // we have to take beam from pinch instead of hand direction
+//
+//    				UpdateNaturalJointPose();
+//    				auto wvrScaleL = m_NaturalHandTrackerData.left.scale;
+//    				auto wvrScaleR = m_NaturalHandTrackerData.right.scale;
+//    				NaturalHandScaleL.x = wvrScaleL.v[0];
+//    				NaturalHandScaleL.y = wvrScaleL.v[1];
+//    				NaturalHandScaleL.z = wvrScaleL.v[2];
+//    				NaturalHandScaleR.x = wvrScaleR.v[0];
+//    				NaturalHandScaleR.y = wvrScaleR.v[1];
+//    				NaturalHandScaleR.z = wvrScaleR.v[2];
+//
+//                    NaturalWristLinearVelocityL.x = m_NaturalHandTrackerData.left.wristLinearVelocity.v[0];
+//                    NaturalWristLinearVelocityL.y = m_NaturalHandTrackerData.left.wristLinearVelocity.v[1];
+//                    NaturalWristLinearVelocityL.z = m_NaturalHandTrackerData.left.wristLinearVelocity.v[2];
+//
+//                    NaturalWristLinearVelocityR.x = m_NaturalHandTrackerData.right.wristLinearVelocity.v[0];
+//                    NaturalWristLinearVelocityR.y = m_NaturalHandTrackerData.right.wristLinearVelocity.v[1];
+//                    NaturalWristLinearVelocityR.z = m_NaturalHandTrackerData.right.wristLinearVelocity.v[2];
+//
+//                    NaturalWristAngularVelocityL.x = m_NaturalHandTrackerData.left.wristAngularVelocity.v[0];
+//                    NaturalWristAngularVelocityL.y = m_NaturalHandTrackerData.left.wristAngularVelocity.v[1];
+//                    NaturalWristAngularVelocityL.z = m_NaturalHandTrackerData.left.wristAngularVelocity.v[2];
+//
+//                    NaturalWristAngularVelocityR.x = m_NaturalHandTrackerData.right.wristAngularVelocity.v[0];
+//                    NaturalWristAngularVelocityR.y = m_NaturalHandTrackerData.right.wristAngularVelocity.v[1];
+//                    NaturalWristAngularVelocityR.z = m_NaturalHandTrackerData.right.wristAngularVelocity.v[2];
+//
+////                    if (printable)
+////                    {
+////                        VRB_ERROR("TickHandData() Natural left valid %d, right valid %d",
+////                            (uint8_t)m_NaturalHandTrackerData.left.isValidPose,
+////                            (uint8_t)m_NaturalHandTrackerData.right.isValidPose);
+////                        VRB_ERROR("TickHandData() Natural left scale (%f, %f, %f), right scale (%f, %f, %f)",
+////                            NaturalHandScaleL.x, NaturalHandScaleL.y, NaturalHandScaleL.z,
+////                            NaturalHandScaleR.x, NaturalHandScaleR.y, NaturalHandScaleR.z);
+////                        VRB_ERROR("TickHandData() Natural left linear velocity (%f, %f, %f), right linear velocity (%f, %f, %f)",
+////                            NaturalWristLinearVelocityL.x, NaturalWristLinearVelocityL.y, NaturalWristLinearVelocityL.z,
+////                            NaturalWristLinearVelocityR.x, NaturalWristLinearVelocityR.y, NaturalWristLinearVelocityR.z);
+////                        VRB_ERROR("TickHandData() Natural left angular velocity (%f, %f, %f), right angular velocity (%f, %f, %f)",
+////                            NaturalWristAngularVelocityL.x, NaturalWristAngularVelocityL.y, NaturalWristAngularVelocityL.z,
+////                            NaturalWristAngularVelocityR.x, NaturalWristAngularVelocityR.y, NaturalWristAngularVelocityR.z);
+////                    }
+//                }
+//    		}
+//    		else
+//    		{
+//    			hasNaturalTrackerData = false;
+//    		}
+//    	}
+//    }
 
-    	/* ----------------------- Hand Tracking -----------------------*/
-    	HandTrackingStatus natural_tracker_status = GetHandTrackingStatus(WVR_HandTrackerType_Natural);
-    	if (natural_tracker_status == HandTrackingStatus::AVAILABLE)
-    	{
-    		// Calls GetHandJointCount one time after starting tracker.
-    		if (!hasNaturalTrackerInfo)
-    		{
-    			WVR_Result result = WVR_GetHandJointCount(WVR_HandTrackerType::WVR_HandTrackerType_Natural, &m_NaturalTrackerInfo.jointCount);
-    			if (result == WVR_Result::WVR_Success)
-    			{
-    				/// Initialize m_NaturalTrackerInfo
-    				m_NaturalTrackerInfo.handModelTypeBitMask = 0;
-    				if (m_NaturalTrackerInfo.jointMappingArray != nullptr)
-    				{
-    					delete[] m_NaturalTrackerInfo.jointMappingArray;
-    					m_NaturalTrackerInfo.jointMappingArray = nullptr;
-    				}
-    				m_NaturalTrackerInfo.jointMappingArray = new WVR_HandJoint[m_NaturalTrackerInfo.jointCount];
+//    UnityXRVector3 WVRVector3ToUnityVector3(WVR_Vector3f_t v) {
+//        UnityXRVector3 res = UnityXRVector3();
+//        res.x = v.v[0];
+//        res.y = v.v[1];
+//        res.z = v.v[2];
+//        return res;
+//    }
+//
+//    UnityXRVector4 WVRQuatToUnityVector4(WVR_Quatf_t q) {
+//        UnityXRVector4 res = UnityXRVector4();
+//        res.x = q.x;
+//        res.y = q.y;
+//        res.z = q.z;
+//        res.w = q.w;
+//        return res;
+//    }
 
-    				if (m_NaturalTrackerInfo.jointValidFlagArray != nullptr)
-    				{
-    					delete[] m_NaturalTrackerInfo.jointValidFlagArray;
-    					m_NaturalTrackerInfo.jointValidFlagArray = nullptr;
-    				}
-    				m_NaturalTrackerInfo.jointValidFlagArray = new uint64_t[m_NaturalTrackerInfo.jointCount];
-
-    				m_NaturalTrackerInfo.pinchTHR = 0;
-
-    				hasNaturalTrackerInfo =
-    					(WVR_GetHandTrackerInfo(WVR_HandTrackerType::WVR_HandTrackerType_Natural, &m_NaturalTrackerInfo) == WVR_Result::WVR_Success ? true : false);
-
-    				if (hasNaturalTrackerInfo)
-    				{
-    					/// Initialize m_NaturalHandTrackerData
-    					m_NaturalHandTrackerData.timestamp = 0;
-    					m_NaturalHandTrackerData.left.confidence = 0;
-    					m_NaturalHandTrackerData.left.isValidPose = false;
-    					m_NaturalHandTrackerData.left.jointCount = m_NaturalTrackerInfo.jointCount;
-    					if (m_NaturalHandTrackerData.left.joints != nullptr)
-    					{
-    						delete[]m_NaturalHandTrackerData.left.joints;
-    						m_NaturalHandTrackerData.left.joints = nullptr;
-
-    					}
-    					m_NaturalHandTrackerData.left.joints = new WVR_Pose_t[m_NaturalTrackerInfo.jointCount];
-    					m_NaturalHandTrackerData.left.scale.v[0] = 0;
-    					m_NaturalHandTrackerData.left.scale.v[1] = 0;
-    					m_NaturalHandTrackerData.left.scale.v[2] = 0;
-
-    					m_NaturalHandTrackerData.right.confidence = 0;
-    					m_NaturalHandTrackerData.right.isValidPose = false;
-    					m_NaturalHandTrackerData.right.jointCount = m_NaturalTrackerInfo.jointCount;
-    					if (m_NaturalHandTrackerData.right.joints != nullptr)
-    					{
-    						delete[] m_NaturalHandTrackerData.right.joints;
-    						m_NaturalHandTrackerData.right.joints = nullptr;
-
-    					}
-    					m_NaturalHandTrackerData.right.joints = new WVR_Pose_t[m_NaturalTrackerInfo.jointCount];
-    					m_NaturalHandTrackerData.right.scale.v[0] = 0;
-    					m_NaturalHandTrackerData.right.scale.v[1] = 0;
-    					m_NaturalHandTrackerData.right.scale.v[2] = 0;
-
-
-    					/// Initialize m_NaturalHandPoseData
-    					m_NaturalHandPoseData.timestamp = 0;
-    					m_NaturalHandPoseData.left.base.type = WVR_HandPoseType::WVR_HandPoseType_Invalid;
-    					m_NaturalHandPoseData.right.base.type = WVR_HandPoseType::WVR_HandPoseType_Invalid;
-    				}
-    			}
-    		} // if (!hasNaturalTrackerInfo)
-
-    		// Calls GetHandTrackingData on each frame.
-    		if (hasNaturalTrackerInfo &&
-    			((m_NaturalTrackerInfo.handModelTypeBitMask & (uint64_t)WVR_HandModelType::WVR_HandModelType_WithoutController) != 0))
-    		{
-    			hasNaturalTrackerData = (
-    				WVR_GetHandTrackingData(
-    					WVR_HandTrackerType::WVR_HandTrackerType_Natural,
-    					WVR_HandModelType::WVR_HandModelType_WithoutController,
-    					poseOrigin,
-    					&m_NaturalHandTrackerData,
-    					&m_NaturalHandPoseData
-    				) == WVR_Result::WVR_Success ? true : false);
-
-    			if (hasNaturalTrackerData)
-    			{
-    			    // m_NaturalHandPoseData contains pinch data
-    			    // we have to take beam from pinch instead of hand direction
-
-    				UpdateNaturalJointPose();
-    				auto wvrScaleL = m_NaturalHandTrackerData.left.scale;
-    				auto wvrScaleR = m_NaturalHandTrackerData.right.scale;
-    				NaturalHandScaleL.x = wvrScaleL.v[0];
-    				NaturalHandScaleL.y = wvrScaleL.v[1];
-    				NaturalHandScaleL.z = wvrScaleL.v[2];
-    				NaturalHandScaleR.x = wvrScaleR.v[0];
-    				NaturalHandScaleR.y = wvrScaleR.v[1];
-    				NaturalHandScaleR.z = wvrScaleR.v[2];
-
-                    NaturalWristLinearVelocityL.x = m_NaturalHandTrackerData.left.wristLinearVelocity.v[0];
-                    NaturalWristLinearVelocityL.y = m_NaturalHandTrackerData.left.wristLinearVelocity.v[1];
-                    NaturalWristLinearVelocityL.z = m_NaturalHandTrackerData.left.wristLinearVelocity.v[2];
-
-                    NaturalWristLinearVelocityR.x = m_NaturalHandTrackerData.right.wristLinearVelocity.v[0];
-                    NaturalWristLinearVelocityR.y = m_NaturalHandTrackerData.right.wristLinearVelocity.v[1];
-                    NaturalWristLinearVelocityR.z = m_NaturalHandTrackerData.right.wristLinearVelocity.v[2];
-
-                    NaturalWristAngularVelocityL.x = m_NaturalHandTrackerData.left.wristAngularVelocity.v[0];
-                    NaturalWristAngularVelocityL.y = m_NaturalHandTrackerData.left.wristAngularVelocity.v[1];
-                    NaturalWristAngularVelocityL.z = m_NaturalHandTrackerData.left.wristAngularVelocity.v[2];
-
-                    NaturalWristAngularVelocityR.x = m_NaturalHandTrackerData.right.wristAngularVelocity.v[0];
-                    NaturalWristAngularVelocityR.y = m_NaturalHandTrackerData.right.wristAngularVelocity.v[1];
-                    NaturalWristAngularVelocityR.z = m_NaturalHandTrackerData.right.wristAngularVelocity.v[2];
-
-//                    if (printable)
-//                    {
-//                        VRB_ERROR("TickHandData() Natural left valid %d, right valid %d",
-//                            (uint8_t)m_NaturalHandTrackerData.left.isValidPose,
-//                            (uint8_t)m_NaturalHandTrackerData.right.isValidPose);
-//                        VRB_ERROR("TickHandData() Natural left scale (%f, %f, %f), right scale (%f, %f, %f)",
-//                            NaturalHandScaleL.x, NaturalHandScaleL.y, NaturalHandScaleL.z,
-//                            NaturalHandScaleR.x, NaturalHandScaleR.y, NaturalHandScaleR.z);
-//                        VRB_ERROR("TickHandData() Natural left linear velocity (%f, %f, %f), right linear velocity (%f, %f, %f)",
-//                            NaturalWristLinearVelocityL.x, NaturalWristLinearVelocityL.y, NaturalWristLinearVelocityL.z,
-//                            NaturalWristLinearVelocityR.x, NaturalWristLinearVelocityR.y, NaturalWristLinearVelocityR.z);
-//                        VRB_ERROR("TickHandData() Natural left angular velocity (%f, %f, %f), right angular velocity (%f, %f, %f)",
-//                            NaturalWristAngularVelocityL.x, NaturalWristAngularVelocityL.y, NaturalWristAngularVelocityL.z,
-//                            NaturalWristAngularVelocityR.x, NaturalWristAngularVelocityR.y, NaturalWristAngularVelocityR.z);
-//                    }
-                }
-    		}
-    		else
-    		{
-    			hasNaturalTrackerData = false;
-    		}
-    	}
-    }
-
-    UnityXRVector3 WVRVector3ToUnityVector3(WVR_Vector3f_t v) {
-        UnityXRVector3 res = UnityXRVector3();
-        res.x = v.v[0];
-        res.y = v.v[1];
-        res.z = v.v[2];
-        return res;
-    }
-
-    UnityXRVector4 WVRQuatToUnityVector4(WVR_Quatf_t q) {
-        UnityXRVector4 res = UnityXRVector4();
-        res.x = q.x;
-        res.y = q.y;
-        res.z = q.z;
-        res.w = q.w;
-        return res;
-    }
-
-    void UpdateNaturalJointPose()
-    {
-    	if (!hasNaturalTrackerInfo || !hasNaturalTrackerData) { return; }
-
-    	for (int i = 0; i < m_NaturalTrackerInfo.jointCount; i++)
-    	{
-    		WVR_HandJoint joint = m_NaturalTrackerInfo.jointMappingArray[i];
-    		if ((m_NaturalTrackerInfo.jointValidFlagArray[i] & WVR_HandJointValidFlag_PositionValid) != 0)
-    		{
-    			if (i < m_NaturalHandTrackerData.left.jointCount && m_NaturalHandTrackerData.left.isValidPose)
-    			{
-    				s_JointPositionNaturalLeft[(uint32_t)joint] = WVRVector3ToUnityVector3(
-    					m_NaturalHandTrackerData.left.joints[i].position
-    				);
-    			}
-    			if (i < m_NaturalHandTrackerData.right.jointCount && m_NaturalHandTrackerData.right.isValidPose)
-    			{
-    				s_JointPositionNaturalRight[(uint32_t)joint] = WVRVector3ToUnityVector3(
-    					m_NaturalHandTrackerData.right.joints[i].position
-    				);
-    			}
-    		}
-    		if ((m_NaturalTrackerInfo.jointValidFlagArray[i] & WVR_HandJointValidFlag_RotationValid) != 0)
-    		{
-    			if (i < m_NaturalHandTrackerData.left.jointCount && m_NaturalHandTrackerData.left.isValidPose)
-    			{
-    				s_JointRotationNaturalLeft[(uint32_t)joint] = WVRQuatToUnityVector4(
-    					m_NaturalHandTrackerData.left.joints[i].rotation
-    				);
-    			}
-    			if (i < m_NaturalHandTrackerData.right.jointCount && m_NaturalHandTrackerData.right.isValidPose)
-    			{
-    				s_JointRotationNaturalRight[(uint32_t)joint] = WVRQuatToUnityVector4(
-    					m_NaturalHandTrackerData.right.joints[i].rotation
-    				);
-    			}
-    		}
-    	}
-    }
-
-    HandTrackingStatus GetHandTrackingStatus(WVR_HandTrackerType tracker)
-    {
-        if (tracker == WVR_HandTrackerType_Natural)
-            return m_NaturalTrackerStatus;
-
-//        if (tracker == WVR_HandTrackerType_Electronic)
-//            return m_ElectronicTrackerStatus;
-
-        return HandTrackingStatus::UNSUPPORT;
-    }
-
-    bool CanStartHandTracking(WVR_HandTrackerType tracker)
-    {
-    	HandTrackingStatus status = GetHandTrackingStatus(tracker);
-    	if (status == HandTrackingStatus::NOT_START ||
-    		status == HandTrackingStatus::START_FAILURE)
-    	{
-    		return true;
-    	}
-    	return false;
-    }
-
-    void StartHandTrackingLock(WVR_HandTrackerType tracker)
-    {
-    	if (!CanStartHandTracking(tracker)) { return; }
-
-    	SetHandTrackingStatus(tracker, HandTrackingStatus::STARTING);
-    	WVR_Result result = WVR_StartHandTracking(tracker);
-    	switch (result)
-    	{
-    		case WVR_Success:
-    			SetHandTrackingStatus(tracker, HandTrackingStatus::AVAILABLE);
-    			break;
-    		case WVR_Error_FeatureNotSupport:
-    			SetHandTrackingStatus(tracker, HandTrackingStatus::UNSUPPORT);
-    			break;
-    		default:
-    			SetHandTrackingStatus(tracker, HandTrackingStatus::START_FAILURE);
-    			break;
-    	}
-
-    	HandTrackingStatus status = GetHandTrackingStatus(tracker);
-    }
-
-    void SetHandTrackingStatus(WVR_HandTrackerType tracker, HandTrackingStatus status)
-    {
-    	if (tracker == WVR_HandTrackerType_Natural)
-    		m_NaturalTrackerStatus = status;
-
-//    	if (tracker == WVR_HandTrackerType_Electronic)
-//    		m_ElectronicTrackerStatus = status;
-    }
+//    void UpdateNaturalJointPose()
+//    {
+//    	if (!hasNaturalTrackerInfo || !hasNaturalTrackerData) { return; }
+//
+//    	for (int i = 0; i < m_NaturalTrackerInfo.jointCount; i++)
+//    	{
+//    		WVR_HandJoint joint = m_NaturalTrackerInfo.jointMappingArray[i];
+//    		if ((m_NaturalTrackerInfo.jointValidFlagArray[i] & WVR_HandJointValidFlag_PositionValid) != 0)
+//    		{
+//    			if (i < m_NaturalHandTrackerData.left.jointCount && m_NaturalHandTrackerData.left.isValidPose)
+//    			{
+//    				s_JointPositionNaturalLeft[(uint32_t)joint] = WVRVector3ToUnityVector3(
+//    					m_NaturalHandTrackerData.left.joints[i].position
+//    				);
+//    			}
+//    			if (i < m_NaturalHandTrackerData.right.jointCount && m_NaturalHandTrackerData.right.isValidPose)
+//    			{
+//    				s_JointPositionNaturalRight[(uint32_t)joint] = WVRVector3ToUnityVector3(
+//    					m_NaturalHandTrackerData.right.joints[i].position
+//    				);
+//    			}
+//    		}
+//    		if ((m_NaturalTrackerInfo.jointValidFlagArray[i] & WVR_HandJointValidFlag_RotationValid) != 0)
+//    		{
+//    			if (i < m_NaturalHandTrackerData.left.jointCount && m_NaturalHandTrackerData.left.isValidPose)
+//    			{
+//    				s_JointRotationNaturalLeft[(uint32_t)joint] = WVRQuatToUnityVector4(
+//    					m_NaturalHandTrackerData.left.joints[i].rotation
+//    				);
+//    			}
+//    			if (i < m_NaturalHandTrackerData.right.jointCount && m_NaturalHandTrackerData.right.isValidPose)
+//    			{
+//    				s_JointRotationNaturalRight[(uint32_t)joint] = WVRQuatToUnityVector4(
+//    					m_NaturalHandTrackerData.right.joints[i].rotation
+//    				);
+//    			}
+//    		}
+//    	}
+//    }
+//
+//    HandTrackingStatus GetHandTrackingStatus(WVR_HandTrackerType tracker)
+//    {
+//        if (tracker == WVR_HandTrackerType_Natural)
+//            return m_NaturalTrackerStatus;
+//
+////        if (tracker == WVR_HandTrackerType_Electronic)
+////            return m_ElectronicTrackerStatus;
+//
+//        return HandTrackingStatus::UNSUPPORT;
+//    }
+//
+//    bool CanStartHandTracking(WVR_HandTrackerType tracker)
+//    {
+//    	HandTrackingStatus status = GetHandTrackingStatus(tracker);
+//    	if (status == HandTrackingStatus::NOT_START ||
+//    		status == HandTrackingStatus::START_FAILURE)
+//    	{
+//    		return true;
+//    	}
+//    	return false;
+//    }
+//
+//    void StartHandTrackingLock(WVR_HandTrackerType tracker)
+//    {
+//    	if (!CanStartHandTracking(tracker)) { return; }
+//
+//    	SetHandTrackingStatus(tracker, HandTrackingStatus::STARTING);
+//    	WVR_Result result = WVR_StartHandTracking(tracker);
+//    	switch (result)
+//    	{
+//    		case WVR_Success:
+//    			SetHandTrackingStatus(tracker, HandTrackingStatus::AVAILABLE);
+//    			break;
+//    		case WVR_Error_FeatureNotSupport:
+//    			SetHandTrackingStatus(tracker, HandTrackingStatus::UNSUPPORT);
+//    			break;
+//    		default:
+//    			SetHandTrackingStatus(tracker, HandTrackingStatus::START_FAILURE);
+//    			break;
+//    	}
+//
+//    	HandTrackingStatus status = GetHandTrackingStatus(tracker);
+//    }
+//
+//    void SetHandTrackingStatus(WVR_HandTrackerType tracker, HandTrackingStatus status)
+//    {
+//    	if (tracker == WVR_HandTrackerType_Natural)
+//    		m_NaturalTrackerStatus = status;
+//
+////    	if (tracker == WVR_HandTrackerType_Electronic)
+////    		m_ElectronicTrackerStatus = status;
+//    }
 
   void InitializeRender() {
     WVR_GetRenderTargetSize(&renderWidth, &renderHeight);
@@ -635,6 +656,9 @@ struct DeviceDelegateWaveVR::State {
       immersiveDisplay->SetNativeFramebufferScaleFactor(SCALE_FACTOR_NATIVE);
     }
     InitializeTextureQueues();
+
+    mHandManager = new HandManager(WVR_HandTrackerType_Natural);
+    mHandManager->onCreate();
   }
 
   void InitializeTextureQueues() {
@@ -662,6 +686,12 @@ struct DeviceDelegateWaveVR::State {
   void Shutdown() {
     WVR_StopHandTracking(WVR_HandTrackerType_Natural);
     ReleaseTextureQueues();
+
+    if(nullptr != mHandManager) {
+        mHandManager->onDestroy();
+        delete mHandManager;
+        mHandManager = nullptr;
+    }
   }
 
   void UpdateStandingMatrix() {
@@ -1347,6 +1377,8 @@ DeviceDelegateWaveVR::StartFrame(const FramePrediction aPrediction) {
       }
     }
   }
+
+  mHandManager->updateAndRender(DrawMode_General, nEye, projs, eyes, mHMDPose);
 }
 
 void
@@ -1373,7 +1405,8 @@ DeviceDelegateWaveVR::BindEye(const device::Eye aWhich) {
 void
 DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
 
-  m.TickHandData(WVR_PoseOriginModel_OriginOnHead);
+    m.mHandManager->handleHandTrackingMechanism();
+//  m.TickHandData(WVR_PoseOriginModel_OriginOnHead);
 
   if (m.currentFBO) {
     m.currentFBO->Unbind();
@@ -1398,6 +1431,16 @@ DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
     VRB_ERROR("Failed to submit right eye frame");
   }
 }
+
+//vrb::LoadTask DeviceDelegateWaveVR::GetHandsModelTask(int32_t aModelIndex) {
+//    vrb::RenderContextPtr localContext = m.context.lock();
+//    if (!localContext) {
+//        return nullptr;
+//    }
+//    return [this, aModelIndex](vrb::CreationContextPtr& aContext) -> vrb::GroupPtr {
+//
+//    };
+//}
 
 vrb::LoadTask DeviceDelegateWaveVR::GetControllerModelTask(int32_t aModelIndex) {
   vrb::RenderContextPtr localContext = m.context.lock();
