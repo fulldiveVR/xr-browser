@@ -12,6 +12,7 @@
 #include "Shader.h"
 #include <vector>
 #include "../log.h"
+#include "vrb/GLError.h"
 
 Shader::Shader(const char * name, const char * vname, const char * vertex, const char * fname, const char * fragment) :
     mName(name), mVName(vname), mFName(fname), mVertexShader(vertex), mFragmentShader(fragment), mProgramId(0) {
@@ -49,44 +50,44 @@ bool Shader::compile() {
     mProgramId = glCreateProgram();
 
     int vshader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vshader, 1, &mVertexShader, NULL);
-    glCompileShader(vshader);
+    VRB_GL_CHECK(glShaderSource(vshader, 1, &mVertexShader, NULL));
+    VRB_GL_CHECK(glCompileShader(vshader));
     if (!hasShaderError(mVName, vshader)) {
-        glDeleteShader(vshader);
-        glDeleteProgram(mProgramId);
+        VRB_GL_CHECK(glDeleteShader(vshader));
+        VRB_GL_CHECK(glDeleteProgram(mProgramId));
         mProgramId = 0;
         return false;
     }
-    glAttachShader(mProgramId, vshader);
-    glDeleteShader(vshader);
+    VRB_GL_CHECK(glAttachShader(mProgramId, vshader));
+    VRB_GL_CHECK(glDeleteShader(vshader));
 
     int fshader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fshader, 1, &mFragmentShader, NULL);
-    glCompileShader(fshader);
+    VRB_GL_CHECK(glShaderSource(fshader, 1, &mFragmentShader, NULL));
+    VRB_GL_CHECK(glCompileShader(fshader));
     if (!hasShaderError(mFName, fshader)) {
-        glDeleteShader(vshader);
-        glDeleteShader(fshader);
-        glDeleteProgram(mProgramId);
+        VRB_GL_CHECK(glDeleteShader(vshader));
+        VRB_GL_CHECK(glDeleteShader(fshader));
+        VRB_GL_CHECK(glDeleteProgram(mProgramId));
         mProgramId = 0;
         return false;
     }
-    glAttachShader(mProgramId, fshader);
-    glDeleteShader(fshader);
+    VRB_GL_CHECK(glAttachShader(mProgramId, fshader));
+    VRB_GL_CHECK(glDeleteShader(fshader));
 
-    glLinkProgram(mProgramId);
+    VRB_GL_CHECK(glLinkProgram(mProgramId));
     GLint programSuccess = GL_TRUE;
-    glGetProgramiv(mProgramId, GL_LINK_STATUS, &programSuccess);
+    VRB_GL_CHECK(glGetProgramiv(mProgramId, GL_LINK_STATUS, &programSuccess));
     if (programSuccess != GL_TRUE) {
         LOGE("%s - Error linking program %d!\n", mName, mProgramId);
-        glDeleteProgram( mProgramId );
+        VRB_GL_CHECK(glDeleteProgram( mProgramId ));
         mProgramId = 0;
         return false;
     }
 
     mVertexShader = NULL;
     mFragmentShader = NULL;
-    glUseProgram(mProgramId);
-    glUseProgram(0);
+    VRB_GL_CHECK(glUseProgram(mProgramId));
+    VRB_GL_CHECK(glUseProgram(0));
 
     LOGD("%s - Program %d Compiled", mName, mProgramId);
     return true;

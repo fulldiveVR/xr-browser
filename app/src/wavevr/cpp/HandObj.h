@@ -12,37 +12,42 @@ enum ShaderProgramIDEnum {
 
 class HandManager;
 
-class HandObj
-{
+class HandObj {
 public:
     explicit HandObj(HandManager *iMgr, HandTypeEnum iHandType);
+
     ~HandObj();
+
 public:
-    void initializeGraphicsSystem();
+    bool initializeGraphicsSystem();
+
     void loadModel(WVR_HandModel_t *iHandModel);
+
     void releaseHandGraphicsResource();
+
     void releaseGraphicsSystem();
+
 public:
     void setTexture(Texture *iTexture);
-    void updateSkeleton(const Matrix4 iSkeletonPoses[sMaxSupportJointNumbers], const Vector3 &iHandScale);
-    Vector4 calculateJointWorldPosition(uint32_t jID) const;
-    void render(
-        const Matrix4 iProj,
-        const Matrix4 iEye,
-        const Matrix4 &iView,
-        const Matrix4 &iHandPose);
 
-    void renderMultiView(
-        const Matrix4 iProjs[DrawMode_MaxModeMumber],
-        const Matrix4 iEyes[DrawMode_MaxModeMumber],
-        const Matrix4 &iView,
-        const Matrix4 &iHandPose);
+    void updateSkeleton(const Matrix4 iSkeletonPoses[sMaxSupportJointNumbers],
+                        const Vector3 &iHandScale);
+
+    Vector4 calculateJointWorldPosition(uint32_t jID) const;
+
+    void render(
+            const Matrix4 iProj,
+            const Matrix4 iEye,
+            const Matrix4 &viewMatrix,
+            const Matrix4 &iHandPose
+    );
+
 protected:
     HandTypeEnum mHandType;
     HandManager *mManager;
 protected:
     HandModel mHandModel;
-    Texture* mHandAlpha;
+    Texture *mHandAlpha;
 protected:
     Vector3 mHandScale;
 protected:

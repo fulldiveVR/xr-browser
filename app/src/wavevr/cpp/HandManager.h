@@ -21,54 +21,71 @@
 
 #include "HandConstant.h"
 #include "HandObj.h"
+#include "vrb/CameraEye.h"
 
-class HandManager
-{
+class HandManager {
 public:
-    HandManager(WVR_HandTrackerType iTrackingType);
-    ~HandManager();
+  HandManager(WVR_HandTrackerType iTrackingType);
+
+  ~HandManager();
+
+  bool isControllerAvailable(WVR_DeviceType param);
+
 public:
-    void onCreate();
-    void onDestroy();
+  void onCreate();
+
+  void onDestroy();
+
 public:
-    void updateAndRender(
-        DrawModeEnum iMode, size_t iEyeID,
-        const Matrix4 iProjs[DrawMode_MaxModeMumber],
-        const Matrix4 iEyes[DrawMode_MaxModeMumber],
-        const Matrix4 &iView);
+  void updateAndRender(HandTypeEnum handMode, vrb::CameraEyePtr cameraEyePtr);
+
 public:
-    void handleHandTrackingMechanism();
+  void handleHandTrackingMechanism();
+
 protected:
-    void startHandTracking();
-    void stopHandTracking();
+  void startHandTracking();
+
+  void stopHandTracking();
+
 protected:
-    void createSharedContext();
-    void destroySharedContext();
-    void loadHandModelAsync();
+  void createSharedContext();
+
+  void destroySharedContext();
+
+  void loadHandModelAsync();
+
+public:
+  void calculateHandMatrices();
+
+  float getButtonPressure(const HandTypeEnum handType);
+  Matrix4 getHandMatrix(const HandTypeEnum handType);
+  bool isDataAvailable(const HandTypeEnum handType);
+
 protected:
-    void calculateHandMatrices();
+  WVR_HandTrackerType mTrackingType;
+  WVR_HandTrackerInfo_t mHandTrackerInfo;
+  WVR_HandTrackingData_t mHandTrackingData;
+  WVR_HandPoseData_t mHandPoseData;
+  std::atomic<bool> mStartFlag;
 protected:
-    WVR_HandTrackerType mTrackingType;
-    WVR_HandTrackerInfo_t mHandTrackerInfo;
-    WVR_HandTrackingData_t mHandTrackingData;
-    WVR_HandPoseData_t mHandPoseData;
-    std::atomic<bool> mStartFlag;
+  bool mIsPrintedSkeErrLog[Hand_MaxNumber];
 protected:
-    bool mIsPrintedSkeErrLog[Hand_MaxNumber];
+  Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
+  Matrix4 mHandPoseMats[Hand_MaxNumber];
+  bool mIsHandPoseValids[Hand_MaxNumber];
 protected:
-    Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
-    Matrix4 mHandPoseMats[Hand_MaxNumber];
-    bool mIsHandPoseValids[Hand_MaxNumber];
+  Matrix4 mHandRayMats[Hand_MaxNumber];
 protected:
-    Matrix4 mHandRayMats[Hand_MaxNumber];
+  HandObj *mHandObjs[Hand_MaxNumber];
+  Texture *mHandAlphaTex;
+  Matrix4 mShift;
+  bool mHandInitialized;
+  Matrix4 mProjectionMatrix;
+  Matrix4 mEyeMatrix;
+  Matrix4 mHeadMatrix;
 protected:
-    HandObj *mHandObjs[Hand_MaxNumber];
-    Texture *mHandAlphaTex;
-    Matrix4 mShift;
-    bool mHandInitialized;
-protected:
-    std::thread mLoadModelThread;
-    std::mutex mGraphicsChangedMutex;
-    EGLContext mEGLInitContext;
-    EGLDisplay mEGLInitDisplay;
+  std::thread mLoadModelThread;
+  std::mutex mGraphicsChangedMutex;
+  EGLContext mEGLInitContext;
+  EGLDisplay mEGLInitDisplay;
 };

@@ -51,6 +51,10 @@ private:
   State& m;
   VRB_NO_DEFAULTS(DeviceDelegateWaveVR)
 
+private:
+  void UpdateController(const int id, const uint32_t deviceId, const vrb::Matrix hmd);
+  void HandsCalculate(const vrb::Matrix hmd);
+
 protected:
     inline Matrix4 wvrmatrixConverter(const WVR_Matrix4f_t& mat) const {
         return Matrix4(

@@ -652,7 +652,7 @@ DeviceDelegateOpenXR::GetControllerModelName(const int32_t aModelIndex) const {
 bool
 DeviceDelegateOpenXR::IsPositionTrackingSupported() const {
   // returns true for 6DoF controllers
-  return m.IsPositionTrackingSupported();
+    return m.systemProperties.trackingProperties.positionTracking == XR_TRUE;
 }
 
 void

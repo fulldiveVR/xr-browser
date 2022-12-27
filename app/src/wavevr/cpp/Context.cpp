@@ -135,12 +135,15 @@ void Context::init(JNIEnv * env, jobject assetManagerInstance) {
 }
 
 EnvWrapper Context::getEnv() {
-    if (mActivityNative != NULL)
-        return EnvWrapper(mVM, mActivityNative->env, true);
+    if (mActivityNative != NULL) {
+        JNIEnv* env = mActivityNative->env;
+        return EnvWrapper(mVM, env, true);
+    }
 
     JNIEnv * env = NULL;
     int stat;
     stat = mVM->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+
     if (stat == JNI_EDETACHED) {
         return EnvWrapper(mVM, env, true);
     } else if (stat == JNI_OK) {

@@ -1622,10 +1622,12 @@ BrowserWorld::DrawWorld(device::Eye aEye) {
   m.rootController->Cull(*m.cullVisitor, *m.drawList);
   m.drawList->Draw(*camera);
   VRB_GL_CHECK(glDepthMask(GL_FALSE));
+
   m.drawList->Reset();
   m.rootTransparent->Cull(*m.cullVisitor, *m.drawList);
   m.drawList->Draw(*camera);
   VRB_GL_CHECK(glDepthMask(GL_TRUE));
+//  VRB_DEBUG("DrawWorld End");
 }
 
 void
