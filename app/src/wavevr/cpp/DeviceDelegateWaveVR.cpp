@@ -457,7 +457,7 @@ namespace crow {
           delegate->SetCapabilityFlags(controller.index, flags);
         }
 
-        if (!isDeviceConnected && handController) {
+        if (handController) {
           const HandTypeEnum handType =
               controller.hand == ElbowModel::HandEnum::Left ? Hand_Left : Hand_Right;
           float bumperPressure = mHandManager->getButtonPressure(handType);
@@ -478,7 +478,7 @@ namespace crow {
           delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_TRIGGER,
                                    device::kImmersiveButtonTrigger, bumperPressed,
                                    bumperPressed, bumperPressure);
-        } else if(isDeviceConnected){
+        } else if (isDeviceConnected) {
           uint32_t ctl_button = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Button);
           uint32_t ctl_touch = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Touch);
           uint32_t ctl_analog = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Analog);
@@ -488,7 +488,7 @@ namespace crow {
           //                          : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
           const bool bumperPressed = WVR_GetInputButtonState(controller.type,
                                                              WVR_InputId_Alias1_Trigger);
-
+          delegate->SetModelVisible(controller.index, true);
 
           // ABXY buttons
           if (ctl_button & WVR_InputId_Alias1_A) {
@@ -603,6 +603,10 @@ namespace crow {
             immersiveAxes[device::kImmersiveAxisTouchpadY] = axisY;
             delegate->SetAxes(controller.index, immersiveAxes, kNumAxes);
           }
+        } else {
+          controller.enabled = false;
+          delegate->SetEnabled(controller.index, false);
+          delegate->SetModelVisible(controller.index, false);
         }
         UpdateHaptics(controller);
       }
@@ -1023,23 +1027,19 @@ namespace crow {
     }
 
     const bool isLeftDeviceConnected = WVR_IsDeviceConnected(WVR_DeviceType_Controller_Left);
-    const bool isLeftHandController = m.mHandManager->isControllerAvailable(WVR_DeviceType_Controller_Left);
+    const bool isLeftHandController = m.mHandManager->isControllerAvailable(
+        WVR_DeviceType_Controller_Left);
 
     const bool isRightDeviceConnected = WVR_IsDeviceConnected(WVR_DeviceType_Controller_Right);
-    const bool isRightHandController = m.mHandManager->isControllerAvailable(WVR_DeviceType_Controller_Right);
+    const bool isRightHandController = m.mHandManager->isControllerAvailable(
+        WVR_DeviceType_Controller_Right);
 
 
-    for (uint32_t id = WVR_DEVICE_HMD + 1; id < WVR_DEVICE_COUNT_LEVEL_1; id++) {
-      if ((m.devicePairs[id].type == WVR_DeviceType_Controller_Right && isRightDeviceConnected) ||
-          (m.devicePairs[id].type == WVR_DeviceType_Controller_Left && isLeftDeviceConnected)) {
-        const int controllerId = m.devicePairs[id].type == m.controllers[0].type ? 0 : 1;
-        UpdateController(controllerId, id, hmd);
-      }
-    }
     for (uint32_t id = 0; id < 2; id++) {
       const HandTypeEnum handType = static_cast<HandTypeEnum>(id);
 
-      if ((handType == Hand_Left && !isLeftDeviceConnected && isLeftHandController) || (handType == Hand_Right && !isRightDeviceConnected && isRightHandController)) {
+      if ((handType == Hand_Left && isLeftHandController) ||
+          (handType == Hand_Right && isRightHandController)) {
         const int controllerId =
             (handType == Hand_Left) == (m.controllers[0].type == WVR_DeviceType_Controller_Left) ? 0
                                                                                                  : 1;
@@ -1052,6 +1052,14 @@ namespace crow {
         controller.transform = matrix;
         controller.transform.TranslateInPlace(kAverageHeight);
         m.delegate->SetTransform(controller.index, controller.transform);
+      }
+    }
+
+    for (uint32_t id = WVR_DEVICE_HMD + 1; id < WVR_DEVICE_COUNT_LEVEL_1; id++) {
+      if ((m.devicePairs[id].type == WVR_DeviceType_Controller_Right && isRightDeviceConnected && !isRightHandController) ||
+          (m.devicePairs[id].type == WVR_DeviceType_Controller_Left && isLeftDeviceConnected && !isLeftHandController) ) {
+        const int controllerId = m.devicePairs[id].type == m.controllers[0].type ? 0 : 1;
+        UpdateController(controllerId, id, hmd);
       }
     }
 
