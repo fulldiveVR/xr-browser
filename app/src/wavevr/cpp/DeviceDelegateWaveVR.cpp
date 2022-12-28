@@ -1050,7 +1050,10 @@ namespace crow {
         controller.enabled = true;
         vrb::Matrix matrix = vrb::Matrix::FromColumnMajor(rayMatrix.get());
         controller.transform = matrix;
-        controller.transform.TranslateInPlace(kAverageHeight);
+
+        if (m.renderMode == device::RenderMode::StandAlone) {
+          controller.transform.TranslateInPlace(kAverageHeight);
+        }
         m.delegate->SetTransform(controller.index, controller.transform);
       }
     }
