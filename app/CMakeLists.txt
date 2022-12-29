@@ -57,6 +57,7 @@ target_sources(
     src/wavevr/cpp/HandManager.cpp
     src/wavevr/cpp/HandModel.cpp
     src/wavevr/cpp/HandObj.cpp
+    src/wavevr/cpp/HandsShaders.cpp
     src/wavevr/cpp/DeviceDelegateWaveVR.cpp
     src/wavevr/cpp/object/FrameBufferObject.cpp
     src/wavevr/cpp/object/Mesh.cpp

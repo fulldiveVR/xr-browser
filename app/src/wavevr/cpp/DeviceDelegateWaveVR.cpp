@@ -800,7 +800,9 @@ namespace crow {
 
     const ControllerMetaInfo controllerMetaInfo = controllersInfo[aModelIndex];
 
-    // TODO: support load hands models
+    if (controllerMetaInfo.interactiveMode == WVR_InteractionMode_Hand) {
+      return m.handManager->getHandModelTask(controllerMetaInfo);
+    }
     return m.controllerManager->getControllerModelTask(controllerMetaInfo);
   }
 

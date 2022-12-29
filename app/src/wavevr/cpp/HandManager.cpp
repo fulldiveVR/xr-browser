@@ -5,12 +5,25 @@
 
 #include "shared/quat.h"
 #include "HandManager.h"
+#include "HandsShaders.h"
 #include "vrb/Matrix.h"
 #include "vrb/Geometry.h"
 #include "vrb/Group.h"
+#include "vrb/TextureGL.h"
+#include "vrb/VertexArray.h"
+#include "vrb/Program.h"
+#include "vrb/ProgramFactory.h"
+#include "vrb/CreationContext.h"
+#include "vrb/RenderState.h"
+#include "vrb/Color.h"
 
 namespace crow {
   static const int32_t kControllerCount = 2;  // Left, Right
+  static const vrb::Color kWhiteColor = vrb::Color(1.0f, 1.0f, 1.0f);
+  static const vrb::Color kBlackColor = vrb::Color(0.0f, 0.0f, 0.0f);
+  static const vrb::Color kBlueColor = vrb::Color(29.0f / 255.0f, 189.0f / 255.0f, 247.0f / 255.0f);
+  static const vrb::Color kBlue2Color = vrb::Color(191.0f / 255.0f, 182.0f / 255.0f,
+                                                   182.0f / 255.0f);
 
   void WVR_HandJointData_tToMatrix4(const WVR_Pose_t &iPose, uint64_t iValidBitMask,
                                     Matrix4 &ioPoseMat) {
@@ -107,7 +120,7 @@ namespace crow {
       : mTrackingType(iType),
         delegate(controllerDelegatePtr), renderMode(device::RenderMode::StandAlone),
         mHandTrackerInfo({}), mHandTrackingData({}), mHandPoseData({}), mStartFlag(false),
-        modelCachedData(nullptr) {
+        modelCachedData(nullptr), mTexture(nullptr) {
     mShift.translate(1, 1.5, 2);
 //    memset((void *) modelCachedData, 0, sizeof(WVR_HandRenderModel_t));
     memset((void *) isModelDataReady, 0, sizeof(bool) * kControllerCount);
@@ -131,10 +144,7 @@ namespace crow {
 //    mHandObjs[hID] = nullptr;
 //  }
 
-    if (mHandAlphaTex != nullptr) {
-      delete mHandAlphaTex;
-      mHandAlphaTex = nullptr;
-    }
+    mTexture = nullptr;
 
     if (modelCachedData != nullptr) {
       WVR_ReleaseNatureHandModel(&modelCachedData); //we will clear cached data ptr to nullptr.
@@ -343,8 +353,6 @@ namespace crow {
 
   void HandManager::updateHand(Controller &controller, const WVR_DevicePosePair_t &devicePair,
                                const vrb::Matrix &hmd) {
-    delegate->SetBatteryLevel(controller.index, 30);
-
     if (!isHandAvailable(controller.hand)) {
       return;
     }
@@ -378,22 +386,149 @@ namespace crow {
   vrb::LoadTask HandManager::getHandModelTask(ControllerMetaInfo controllerMetaInfo) {
     return [this, controllerMetaInfo](vrb::CreationContextPtr &aContext) -> vrb::GroupPtr {
       vrb::GroupPtr root = vrb::Group::Create(aContext);
-      // Load controller model from SDK
       VRB_LOG("[WaveVR] (%p) Loading internal hand model: %d", this, controllerMetaInfo.hand);
 
       if (modelCachedData == nullptr) {
         WVR_GetCurrentNaturalHandModel(&modelCachedData);
       }
 
-
       WVR_HandModel_t &handModel = modelCachedData->left;
       if (controllerMetaInfo.hand == ElbowModel::HandEnum::Right) {
         handModel = modelCachedData->right;
       }
 
-      // TODO: load hand.
+      // Initialize textures
+      if (mTexture == nullptr) {
+        VRB_LOG("[WaveVR] (%p) [%d]: Initialize texture", this, controllerMetaInfo.type);
 
-      return nullptr;
+        WVR_CtrlerTexBitmap_t &srcTexture = modelCachedData->handAlphaTex;
+        size_t texture_size = srcTexture.stride * srcTexture.height;
+        std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(texture_size);
+        memcpy(data.get(), (void *) srcTexture.bitmap, texture_size);
+
+        mTexture = vrb::TextureGL::Create(aContext);
+        mTexture->SetImageData(
+            data,
+            texture_size,
+            (int) srcTexture.width,
+            (int) srcTexture.height,
+            GL_RGBA
+        );
+      } else {
+        VRB_LOG("[WaveVR] (%p) [%d]: Texture initialized already", this, controllerMetaInfo.type);
+      }
+
+      uint32_t verticesCount = handModel.vertices.size;
+
+      VRB_LOG("[WaveVR] (%p) [%d]: Initialize mesh. Vertices: %d", this, controllerMetaInfo.type,
+              verticesCount)
+
+      vrb::VertexArrayPtr array = vrb::VertexArray::Create(aContext);
+
+      // Vertices
+
+      WVR_VertexBuffer_t &vertices = handModel.vertices;
+      if (vertices.buffer == nullptr || vertices.size == 0 ||
+          vertices.dimension == 0) {
+        VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", vertices.buffer,
+                vertices.size, vertices.dimension);
+        return nullptr;
+      }
+
+      uint32_t verticesComponents = vertices.dimension;
+      if (verticesComponents == 3) {
+        for (uint32_t i = 0; i < vertices.size; i += verticesComponents) {
+          auto vertex = vrb::Vector(vertices.buffer[i], vertices.buffer[i + 1],
+                                    vertices.buffer[i + 2]);
+          array->AppendVertex(vertex);
+        }
+      } else {
+        VRB_ERROR("[WaveVR] (%p) [%d]: vertex with wrong dimension: %d", this,
+                  controllerMetaInfo.type,
+                  verticesComponents)
+      }
+
+      // Normals
+      WVR_VertexBuffer_t &normals = handModel.normals;
+      if (normals.buffer == nullptr || normals.size == 0 ||
+          normals.dimension == 0) {
+        VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", normals.buffer,
+                normals.size, normals.dimension);
+        return nullptr;
+      }
+
+      uint32_t normalsComponents = normals.dimension;
+      if (normalsComponents == 3) {
+        for (uint32_t i = 0; i < normals.size; i += normalsComponents) {
+          auto normal = vrb::Vector(normals.buffer[i], normals.buffer[i + 1],
+                                    normals.buffer[i + 2]).Normalize();
+          array->AppendNormal(normal);
+        }
+      } else {
+        VRB_ERROR("[WaveVR] (%p) [%d]: normal with wrong dimension: %d", this,
+                  controllerMetaInfo.type,
+                  normalsComponents)
+      }
+
+      // UV
+      WVR_VertexBuffer_t &texCoords = handModel.texCoords;
+      if (texCoords.buffer == nullptr || texCoords.size == 0 ||
+          texCoords.dimension == 0) {
+        VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", texCoords.buffer,
+                texCoords.size, texCoords.dimension);
+        return nullptr;
+      }
+
+      uint32_t texCoordsComponents = texCoords.dimension;
+      if (texCoordsComponents == 2) {
+        for (uint32_t i = 0; i < texCoords.size; i += texCoordsComponents) {
+          auto textCoord = vrb::Vector(texCoords.buffer[i], texCoords.buffer[i + 1],
+                                       0);
+          array->AppendUV(textCoord);
+        }
+      } else {
+        VRB_ERROR("[WaveVR] (%p) [%d]: UVs with wrong dimension: %d", this,
+                  controllerMetaInfo.type,
+                  texCoordsComponents)
+      }
+
+      // Shaders
+      // TODO: Use shader for hands
+      vrb::ProgramPtr program = aContext->GetProgramFactory()->CreateProgram(aContext,
+                                                                             vrb::FeatureTexture,
+                                                                             GetHandDepthFragment());
+      vrb::RenderStatePtr state = vrb::RenderState::Create(aContext);
+      state->SetProgram(program);
+      state->SetLightsEnabled(false);
+      state->SetTintColor(kBlueColor);
+      state->SetTexture(mTexture);
+
+      // Geometry
+      vrb::GeometryPtr geometry = vrb::Geometry::Create(aContext);
+      geometry->SetName("HandGeometry");
+      geometry->SetVertexArray(array);
+      geometry->SetRenderState(state);
+
+      // Indices
+      WVR_IndexBuffer_t &indices = handModel.indices;
+      if (indices.buffer == nullptr || indices.size == 0 || indices.type == 0) {
+        VRB_ERROR("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", indices.buffer,
+                  indices.size, indices.type);
+        return nullptr;
+      }
+
+      uint32_t type = indices.type;
+      for (uint32_t i = 0; i < indices.size; i += type) {
+        std::vector<int> indicesVector;
+        for (uint32_t j = 0; j < type; j++) {
+          indicesVector.push_back((int) (indices.buffer[i + j] + 1));
+        }
+        geometry->AddFace(indicesVector, indicesVector, indicesVector);
+      }
+
+      root->AddNode(geometry);
+
+      return root;
     };
   }
 }

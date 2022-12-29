@@ -100,8 +100,7 @@ namespace crow {
   protected:
     Matrix4 mHandRayMats[Hand_MaxNumber];
   protected:
-//  HandObj *mHandObjs[Hand_MaxNumber];
-    Texture *mHandAlphaTex;
+    vrb::TextureGLPtr mTexture;
     Matrix4 mShift;
     Matrix4 mProjectionMatrix;
     Matrix4 mEyeMatrix;
