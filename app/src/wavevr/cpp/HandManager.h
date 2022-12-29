@@ -22,70 +22,95 @@
 #include "HandConstant.h"
 #include "HandObj.h"
 #include "vrb/CameraEye.h"
+#include "ElbowModel.h"
+#include "ControllerDelegate.h"
+#include "Controller.h"
+#include "vrb/LoaderThread.h"
 
-class HandManager {
-public:
-  HandManager(WVR_HandTrackerType iTrackingType);
+#include <wvr/wvr_hand_render_model.h>
+#include <mutex>
 
-  ~HandManager();
+namespace crow {
 
-  bool isControllerAvailable(WVR_DeviceType param);
+  class HandManager {
+  public:
+    HandManager(WVR_HandTrackerType iTrackingType, crow::ControllerDelegatePtr &controllerDelegatePtr);
 
-public:
-  void onCreate();
+    ~HandManager();
 
-  void onDestroy();
+  public:
+    void onCreate();
 
-public:
-  void updateAndRender(HandTypeEnum handMode, vrb::CameraEyePtr cameraEyePtr);
+    void onDestroy();
 
-public:
-  void handleHandTrackingMechanism();
+    void setRenderMode(const device::RenderMode mode);
 
-protected:
-  void startHandTracking();
+    void updateHand(Controller &controller, const WVR_DevicePosePair_t &devicePair,
+                    const vrb::Matrix &hmd);
 
-  void stopHandTracking();
+    void updateHandState(Controller &controller);
 
-protected:
-  void createSharedContext();
+  public:
+    void updateAndRender(HandTypeEnum handMode, vrb::CameraEyePtr cameraEyePtr);
 
-  void destroySharedContext();
+  public:
+    void update();
 
-  void loadHandModelAsync();
+  protected:
+    void startHandTracking();
 
-public:
-  void calculateHandMatrices();
+    void stopHandTracking();
 
-  float getButtonPressure(const HandTypeEnum handType);
-  Matrix4 getHandMatrix(const HandTypeEnum handType);
-  bool isDataAvailable(const HandTypeEnum handType);
+  protected:
+    void loadHandModelAsync();
 
-protected:
-  WVR_HandTrackerType mTrackingType;
-  WVR_HandTrackerInfo_t mHandTrackerInfo;
-  WVR_HandTrackingData_t mHandTrackingData;
-  WVR_HandPoseData_t mHandPoseData;
-  std::atomic<bool> mStartFlag;
-protected:
-  bool mIsPrintedSkeErrLog[Hand_MaxNumber];
-protected:
-  Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
-  Matrix4 mHandPoseMats[Hand_MaxNumber];
-  bool mIsHandPoseValids[Hand_MaxNumber];
-protected:
-  Matrix4 mHandRayMats[Hand_MaxNumber];
-protected:
-  HandObj *mHandObjs[Hand_MaxNumber];
-  Texture *mHandAlphaTex;
-  Matrix4 mShift;
-  bool mHandInitialized;
-  Matrix4 mProjectionMatrix;
-  Matrix4 mEyeMatrix;
-  Matrix4 mHeadMatrix;
-protected:
-  std::thread mLoadModelThread;
-  std::mutex mGraphicsChangedMutex;
-  EGLContext mEGLInitContext;
-  EGLDisplay mEGLInitDisplay;
-};
+  public:
+    void calculateHandMatrices();
+
+    bool isHandAvailable(const crow::ElbowModel::HandEnum hand);
+
+    vrb::LoadTask getHandModelTask(ControllerMetaInfo controllerMetaInfo);
+
+  private:
+    float getPinchStrength(const crow::ElbowModel::HandEnum hand);
+
+    vrb::Matrix getRayMatrix(const crow::ElbowModel::HandEnum hand);
+
+
+  private:
+    crow::ControllerDelegatePtr &delegate;
+    device::RenderMode renderMode;
+
+    WVR_HandRenderModel_t *modelCachedData = nullptr;
+    bool isModelDataReady[kMaxControllerCount];
+    std::mutex mCachedDataMutex[kMaxControllerCount];
+
+  protected:
+    WVR_HandTrackerType mTrackingType;
+    WVR_HandTrackerInfo_t mHandTrackerInfo;
+    WVR_HandTrackingData_t mHandTrackingData;
+    WVR_HandPoseData_t mHandPoseData;
+    std::atomic<bool> mStartFlag;
+  protected:
+    bool mIsPrintedSkeErrLog[Hand_MaxNumber];
+  protected:
+    Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
+    Matrix4 mHandPoseMats[Hand_MaxNumber];
+    bool mIsHandPoseValids[Hand_MaxNumber];
+  protected:
+    Matrix4 mHandRayMats[Hand_MaxNumber];
+  protected:
+//  HandObj *mHandObjs[Hand_MaxNumber];
+    Texture *mHandAlphaTex;
+    Matrix4 mShift;
+    Matrix4 mProjectionMatrix;
+    Matrix4 mEyeMatrix;
+    Matrix4 mHeadMatrix;
+  protected:
+    std::thread mLoadModelThread;
+    std::mutex mGraphicsChangedMutex;
+    EGLContext mEGLInitContext;
+    EGLDisplay mEGLInitDisplay;
+
+  };
+}

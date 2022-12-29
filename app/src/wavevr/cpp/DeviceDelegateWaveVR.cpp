@@ -17,26 +17,14 @@
 #include "vrb/Matrix.h"
 #include "vrb/RenderContext.h"
 #include "vrb/Vector.h"
-#include "vrb/VertexArray.h"
-#include "vrb/ProgramFactory.h"
 #include "vrb/RenderState.h"
-#include "vrb/Geometry.h"
-#include "vrb/Group.h"
-#include "vrb/TextureGL.h"
 #include "DeviceDelegate.h"
 #include "HandConstant.h"
 
 #include "HandManager.h"
-
-#include "shared/Matrices.h"
-#include "object/Mesh.h"
-#include "object/Texture.h"
-#include "object/Shader.h"
-
+#include "ControllerManager.h"
 
 #include <array>
-#include <vector>
-#include <mutex>
 
 #include <wvr/wvr.h>
 #include <wvr/wvr_render.h>
@@ -53,80 +41,20 @@
 
 namespace crow {
 
+
+// #define VRB_WAVE_EVENT_LOG_ENABLED 1
+#if defined(VRB_WAVE_EVENT_LOG_ENABLED)
+#  define VRB_WAVE_EVENT_LOG(x) VRB_DEBUG(x)
+#else
+#  define VRB_WAVE_EVENT_LOG(x)
+#endif // VRB_WAVE_EVENT_DEBUG
+
 #define SCALE_FACTOR_VIEWPORT 1.0f
 #define SCALE_FACTOR_IMMERSIVE 1.0f
 #define SCALE_FACTOR_TEXTURE 1.0f
 #define SCALE_FACTOR_NATIVE 1.0f
 
-  static const vrb::Vector kAverageHeight(0.0f, 1.7f, 0.0f);
-  static const int32_t kMaxControllerCount = 2;
-  static const int32_t kRecenterDelay = 72;
-
-  typedef struct UnityXRVector3 {
-    /// X component of the vector.
-    float x;
-
-    /// Y component of the vector.
-    float y;
-
-    /// Z component of the vector.
-    float z;
-  } UnityXRVector3;
-
-  typedef struct UnityXRVector4 {
-    /// X component of the vector.
-    float x;
-
-    /// Y component of the vector.
-    float y;
-
-    /// Z component of the vector.
-    float z;
-
-    /// W component of the vector.
-    float w;
-  } UnityXRVector4;
-
-
-  enum class HandTrackingStatus {
-    // Initial, can call Start API in this state.
-    NOT_START = 0,
-    START_FAILURE,
-
-    // Processing, should NOT call API in this state.
-    STARTING,
-    STOPING,
-
-    // Running, can call Stop API in this state.
-    AVAILABLE,
-
-    // Do nothing.
-    UNSUPPORT
-  };
-
   struct DeviceDelegateWaveVR::State {
-    struct Controller {
-      int32_t index;
-      WVR_DeviceType type;
-      bool created;
-      bool enabled;
-      bool isEmulated;
-      bool touched;
-      bool is6DoF;
-      int32_t gripPressedCount;
-      vrb::Matrix transform;
-      ElbowModel::HandEnum hand;
-      uint64_t inputFrameID;
-      float remainingVibrateTime;
-      double lastHapticUpdateTimeStamp;
-
-      Controller()
-          : index(-1), type(WVR_DeviceType_Controller_Right), created(false), enabled(false),
-            touched(false), is6DoF(false), gripPressedCount(0), transform(vrb::Matrix::Identity()),
-            hand(ElbowModel::HandEnum::Right), inputFrameID(0), remainingVibrateTime(0.0f),
-            lastHapticUpdateTimeStamp(0.0f), isEmulated(false) {}
-    };
-
     vrb::RenderContextWeak context;
     bool isRunning;
     vrb::Color clearColor;
@@ -145,48 +73,38 @@ namespace crow {
     uint32_t renderWidth;
     uint32_t renderHeight;
 
-    WVR_DevicePosePair_t devicePairs[WVR_DEVICE_COUNT_LEVEL_1];
-    ElbowModelPtr elbow;
+    WVR_DevicePosePair_t devicePairs[1 + kMaxControllerCount]; // HMD, 2 controllers, 2 hands
     ControllerDelegatePtr delegate;
     GestureDelegatePtr gestures;
     std::array<Controller, kMaxControllerCount> controllers;
     ImmersiveDisplayPtr immersiveDisplay;
     device::DeviceType deviceType;
     bool lastSubmitDiscarded;
-    bool recentered;
     vrb::Matrix reorientMatrix;
     bool ignoreNextRecenter;
     int32_t sixDoFControllerCount;
     bool handsCalculated;
-    WVR_CtrlerModel_t *modelCachedData[2];
-    bool isModelDataReady[2];
-    std::mutex mCachedDataMutex[2];
 
-    Matrix4 mProjectionLeft;
-    Matrix4 mProjectionRight;
-
-    HandManager *mHandManager;
+    HandManager *handManager;
+    ControllerManager *controllerManager;
 
     State()
         : isRunning(true), near(0.1f), far(100.f), foveatedFov(0.0f),
           renderMode(device::RenderMode::StandAlone), leftFBOIndex(0), rightFBOIndex(0),
           leftTextureQueue(nullptr), rightTextureQueue(nullptr), renderWidth(0), renderHeight(0),
           devicePairs{}, controllers{}, deviceType(device::UnknownType), lastSubmitDiscarded(false),
-          recentered(false), ignoreNextRecenter(false), sixDoFControllerCount(0),
-          handsCalculated(false), modelCachedData{}, isModelDataReady{} {
-      memset((void *) devicePairs, 0, sizeof(WVR_DevicePosePair_t) * 2);
-      memset((void *) modelCachedData, 0, sizeof(WVR_CtrlerModel_t) * 2);
-      memset((void *) isModelDataReady, 0, sizeof(bool) * WVR_DEVICE_COUNT_LEVEL_1);
+          ignoreNextRecenter(false), sixDoFControllerCount(0),
+          handsCalculated(false) {
+      memset((void *) devicePairs, 0, sizeof(WVR_DevicePosePair_t) * kMaxControllerCount);
+
       gestures = GestureDelegate::Create();
+
       for (int32_t index = 0; index < kMaxControllerCount; index++) {
         controllers[index].index = index;
-        if (index == 0) {
-          controllers[index].type = WVR_DeviceType_Controller_Right;
-          controllers[index].hand = ElbowModel::HandEnum::Right;
-        } else {
-          controllers[index].type = WVR_DeviceType_Controller_Left;
-          controllers[index].hand = ElbowModel::HandEnum::Left;
-        }
+        controllers[index].type = controllersInfo[index].type;
+        controllers[index].hand = controllersInfo[index].hand;
+        controllers[index].interactionMode = controllersInfo[index].interactiveMode;
+
         controllers[index].is6DoF =
             WVR_GetDegreeOfFreedom(controllers[index].type) == WVR_NumDoF_6DoF;
         if (controllers[index].is6DoF) {
@@ -217,21 +135,7 @@ namespace crow {
       }
     }
 
-    inline Matrix4 wvrmatrixConverter(const WVR_Matrix4f_t &mat) const {
-      return Matrix4(
-          mat.m[0][0], mat.m[1][0], mat.m[2][0], mat.m[3][0],
-          mat.m[0][1], mat.m[1][1], mat.m[2][1], mat.m[3][1],
-          mat.m[0][2], mat.m[1][2], mat.m[2][2], mat.m[3][2],
-          mat.m[0][3], mat.m[1][3], mat.m[2][3], mat.m[3][3]
-      );
-    }
-
     void InitializeCameras() {
-      mProjectionLeft = wvrmatrixConverter(
-          WVR_GetProjection(WVR_Eye_Left, near, far));
-      mProjectionRight = wvrmatrixConverter(
-          WVR_GetProjection(WVR_Eye_Right, near, far));
-
       for (WVR_Eye eye: {WVR_Eye_Left, WVR_Eye_Right}) {
         const device::Eye deviceEye = eye == WVR_Eye_Left ? device::Eye::Left : device::Eye::Right;
         vrb::Matrix eyeOffset = vrb::Matrix::FromRowMajor(
@@ -292,10 +196,10 @@ namespace crow {
       WVR_SetInputRequest(WVR_DeviceType_Controller_Left, inputIdAndTypes,
                           sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
 
-      elbow = ElbowModel::Create();
-
-      mHandManager = new HandManager(WVR_HandTrackerType_Natural);
-      mHandManager->onCreate();
+      handManager = new HandManager(WVR_HandTrackerType_Natural, delegate);
+      handManager->onCreate();
+      controllerManager = new ControllerManager(delegate, context);
+      controllerManager->onCreate();
     }
 
 
@@ -345,13 +249,17 @@ namespace crow {
     }
 
     void Shutdown() {
-      WVR_StopHandTracking(WVR_HandTrackerType_Natural);
       ReleaseTextureQueues();
 
-      if (nullptr != mHandManager) {
-        mHandManager->onDestroy();
-        delete mHandManager;
-        mHandManager = nullptr;
+      if (nullptr != handManager) {
+        handManager->onDestroy();
+        delete handManager;
+        handManager = nullptr;
+      }
+      if (nullptr != controllerManager) {
+        controllerManager->onDestroy();
+        delete controllerManager;
+        controllerManager = nullptr;
       }
     }
 
@@ -372,36 +280,39 @@ namespace crow {
           vrb::Matrix::Translation(vrb::Vector(0.0f, delta, 0.0f)));
     }
 
-    void CreateController(Controller &aController) {
+    void CreateController(Controller &controller) {
       if (!delegate) {
         VRB_ERROR("Failed to create controller. No ControllerDelegate has been set.");
         return;
       }
       vrb::Matrix beamTransform(vrb::Matrix::Identity());
-      if (aController.is6DoF) {
+      if (controller.is6DoF) {
         beamTransform.TranslateInPlace(vrb::Vector(0.0f, 0.01f, -0.05f));
       }
-      delegate->CreateController(aController.index,
-                                 aController.is6DoF ? static_cast<int>(aController.hand) : 0,
-                                 aController.is6DoF ? "HTC Vive 6DoF Controller"
-                                                    : "HTC Vive 3DoF Controller",
+      delegate->CreateController(controller.index,
+                                 controller.index,
+                                 controller.is6DoF ? "HTC Vive 6DoF Controller"
+                                                   : "HTC Vive 3DoF Controller",
                                  beamTransform);
-      delegate->SetLeftHanded(aController.index, aController.hand == ElbowModel::HandEnum::Left);
-      delegate->SetHapticCount(aController.index, 1);
-      delegate->SetControllerType(aController.index, aController.is6DoF ? device::ViveFocusPlus :
-                                                     device::ViveFocus);
-      delegate->SetTargetRayMode(aController.index, device::TargetRayMode::TrackedPointer);
+      delegate->SetLeftHanded(controller.index, controller.hand == ElbowModel::HandEnum::Left);
+      delegate->SetHapticCount(controller.index,
+                               controller.interactionMode == WVR_InteractionMode_Controller ? 1
+                                                                                            : 0);
+      delegate->SetControllerType(controller.index, controller.is6DoF ? device::ViveFocusPlus :
+                                                    device::ViveFocus);
+      delegate->SetTargetRayMode(controller.index, device::TargetRayMode::TrackedPointer);
 
-      if (aController.is6DoF) {
+
+      if (controller.is6DoF) {
         const vrb::Matrix trans = vrb::Matrix::Position(vrb::Vector(0.0f, -0.021f, -0.03f));
         vrb::Matrix transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), -0.70f);
         transform = transform.PostMultiply(trans);
 
-        delegate->SetImmersiveBeamTransform(aController.index,
+        delegate->SetImmersiveBeamTransform(controller.index,
                                             beamTransform.PostMultiply(transform));
       }
-      aController.created = true;
-      aController.enabled = false;
+      controller.created = true;
+      controller.enabled = false;
     }
 
     void UpdateControllers() {
@@ -419,7 +330,10 @@ namespace crow {
         return;
       }
 
-      mHandManager->calculateHandMatrices();
+      const WVR_InteractionMode interactionMode = WVR_GetInteractionMode();
+
+      handManager->update();
+
       for (Controller &controller: controllers) {
         const bool is6DoF = WVR_GetDegreeOfFreedom(controller.type) == WVR_NumDoF_6DoF;
         if (controller.is6DoF != is6DoF) {
@@ -437,15 +351,16 @@ namespace crow {
           CreateController(controller);
         }
         const bool isDeviceConnected = WVR_IsDeviceConnected(controller.type);
-        const bool handController = mHandManager->isControllerAvailable(controller.type);
-        if (!isDeviceConnected &&
-            !handController) {
+
+        if (!isDeviceConnected || interactionMode != controller.interactionMode) {
           if (controller.enabled) {
             delegate->SetEnabled(controller.index, false);
             controller.enabled = false;
           }
           continue;
-        } else if (!controller.enabled) {
+        }
+
+        if (!controller.enabled) {
           device::CapabilityFlags flags = device::Orientation | device::GripSpacePosition;
           if (controller.is6DoF) {
             flags |= device::Position;
@@ -455,160 +370,14 @@ namespace crow {
           controller.enabled = true;
           delegate->SetEnabled(controller.index, true);
           delegate->SetCapabilityFlags(controller.index, flags);
-        }
-
-        if (handController) {
-          const HandTypeEnum handType =
-              controller.hand == ElbowModel::HandEnum::Left ? Hand_Left : Hand_Right;
-          float bumperPressure = mHandManager->getButtonPressure(handType);
-
-          if (bumperPressure < 0.1) {
-            bumperPressure = -1.0;
-          } else if (bumperPressure > 0.9) {
-            bumperPressure = 1.0;
-          }
-          bool bumperPressed = bumperPressure > 0.4;
-
-          controller.enabled = true;
-          delegate->SetSelectActionStop(controller.index);
-          delegate->SetEnabled(controller.index, true);
-          delegate->SetModelVisible(controller.index, false);
-          delegate->SetFocused(controller.index);
-          delegate->SetButtonCount(controller.index, 3);
-          delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_TRIGGER,
-                                   device::kImmersiveButtonTrigger, bumperPressed,
-                                   bumperPressed, bumperPressure);
-        } else if (isDeviceConnected) {
-          uint32_t ctl_button = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Button);
-          uint32_t ctl_touch = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Touch);
-          uint32_t ctl_analog = WVR_GetInputDeviceCapability(controller.type, WVR_InputType_Analog);
-
-          // Flow fix MOHUS
-          //const bool bumperPressed = (controller.is6DoF) ? WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Trigger)
-          //                          : WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_Bumper);
-          const bool bumperPressed = WVR_GetInputButtonState(controller.type,
-                                                             WVR_InputId_Alias1_Trigger);
           delegate->SetModelVisible(controller.index, true);
-
-          // ABXY buttons
-          if (ctl_button & WVR_InputId_Alias1_A) {
-            const bool aPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_A);
-            const bool aTouched = WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_A);
-            if (controller.hand == ElbowModel::HandEnum::Left) {
-              delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_X,
-                                       device::kImmersiveButtonA, aPressed, aTouched);
-            } else if (controller.hand == ElbowModel::HandEnum::Right) {
-              delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_A,
-                                       device::kImmersiveButtonA, aPressed, aTouched);
-            }
-          }
-          if (ctl_button & WVR_InputId_Alias1_B) {
-            const bool bPressed = WVR_GetInputButtonState(controller.type, WVR_InputId_Alias1_B);
-            const bool bTouched = WVR_GetInputTouchState(controller.type, WVR_InputId_Alias1_B);
-            if (controller.hand == ElbowModel::HandEnum::Left) {
-              delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_Y,
-                                       device::kImmersiveButtonB, bPressed, bTouched);
-            } else if (controller.hand == ElbowModel::HandEnum::Right) {
-              delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_B,
-                                       device::kImmersiveButtonB, bPressed, bTouched);
-            }
-          }
-
-          const bool touchpadPressed = WVR_GetInputButtonState(controller.type,
-                                                               WVR_InputId_Alias1_Touchpad);
-          const bool touchpadTouched = WVR_GetInputTouchState(controller.type,
-                                                              WVR_InputId_Alias1_Touchpad);
-          const bool menuPressed = WVR_GetInputButtonState(controller.type,
-                                                           WVR_InputId_Alias1_Menu);
-
-          // Although Focus only has two buttons, in order to match WebXR input profile (squeeze placeholder),
-          // we make Focus has three buttons.
-          delegate->SetButtonCount(controller.index, 3);
-          delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_TOUCHPAD,
-                                   device::kImmersiveButtonTouchpad, touchpadPressed,
-                                   touchpadTouched);
-          delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_TRIGGER,
-                                   device::kImmersiveButtonTrigger, bumperPressed, bumperPressed);
-          if (controller.is6DoF) {
-            const bool gripPressed = WVR_GetInputButtonState(controller.type,
-                                                             WVR_InputId_Alias1_Grip);
-
-            if (renderMode == device::RenderMode::StandAlone) {
-              if (gripPressed && (controller.gripPressedCount >= 0)) {
-                controller.gripPressedCount++;
-              } else if (!gripPressed) {
-                controller.gripPressedCount = 0;
-              }
-              if (controller.gripPressedCount > kRecenterDelay) {
-                WVR_InAppRecenter(WVR_RecenterType_YawAndPosition);
-                recentered = true;
-                handsCalculated = false;
-                controller.gripPressedCount = -1;
-              }
-            } else {
-              delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_SQUEEZE,
-                                       device::kImmersiveButtonSqueeze,
-                                       gripPressed, gripPressed);
-              controller.gripPressedCount = 0;
-            }
-            if (gripPressed && renderMode == device::RenderMode::Immersive) {
-              delegate->SetSqueezeActionStart(controller.index);
-            } else {
-              delegate->SetSqueezeActionStop(controller.index);
-            }
-          }
-
-          if (bumperPressed && renderMode == device::RenderMode::Immersive) {
-            delegate->SetSelectActionStart(controller.index);
-          } else {
-            delegate->SetSelectActionStop(controller.index);
-          }
-          delegate->SetButtonState(controller.index, ControllerDelegate::BUTTON_APP, -1,
-                                   menuPressed,
-                                   menuPressed);
-
-          float axisX = 0.0f;
-          float axisY = 0.0f;
-          if (touchpadTouched) {
-            WVR_Axis_t axis = WVR_GetInputAnalogAxis(controller.type, WVR_InputId_Alias1_Touchpad);
-            axisX = axis.x;
-            axisY = -axis.y;
-            // In case we have thumbstick we don't send the touchpad touched event
-            if (!(ctl_touch & WVR_InputId_Alias1_Thumbstick)) {
-              // We are matching touch pad range from {-1, 1} to the Oculus {0, 1}.
-              delegate->SetTouchPosition(controller.index, (axis.x + 1) * 0.5, (-axis.y + 1) * 0.5);
-              controller.touched = true;
-            }
-            delegate->SetScrolledDelta(
-                controller.index,
-                -axis.x, axis.y);
-          } else if (controller.touched) {
-            if (!(ctl_touch & WVR_InputId_Alias1_Thumbstick)) {
-              controller.touched = false;
-              delegate->EndTouch(controller.index);
-            }
-          }
-
-          if (controller.is6DoF) {
-            const int32_t kNumAxes = 4;
-            float immersiveAxes[kNumAxes];
-            immersiveAxes[device::kImmersiveAxisTouchpadX] = immersiveAxes[device::kImmersiveAxisTouchpadY] = 0.0f;
-            immersiveAxes[device::kImmersiveAxisThumbstickX] = axisX;
-            immersiveAxes[device::kImmersiveAxisThumbstickY] = axisY;
-            delegate->SetAxes(controller.index, immersiveAxes, kNumAxes);
-          } else {
-            const int32_t kNumAxes = 2;
-            float immersiveAxes[kNumAxes] = {0.0f, 0.0f};
-            immersiveAxes[device::kImmersiveAxisTouchpadX] = axisX;
-            immersiveAxes[device::kImmersiveAxisTouchpadY] = axisY;
-            delegate->SetAxes(controller.index, immersiveAxes, kNumAxes);
-          }
-        } else {
-          controller.enabled = false;
-          delegate->SetEnabled(controller.index, false);
-          delegate->SetModelVisible(controller.index, false);
         }
-        UpdateHaptics(controller);
+
+        if (controller.interactionMode == WVR_InteractionMode_Hand) {
+          handManager->updateHandState(controller);
+        } else {
+          controllerManager->updateControllerState(controller);
+        }
       }
     }
 
@@ -625,61 +394,6 @@ namespace crow {
         immersiveDisplay->SetStageSize(arena.area.round.diameter, arena.area.round.diameter);
       } else {
         immersiveDisplay->SetStageSize(0.0f, 0.0f);
-      }
-    }
-
-    void UpdateHaptics(Controller &controller) {
-      vrb::RenderContextPtr renderContext = context.lock();
-      if (!renderContext) {
-        return;
-      }
-      if (!delegate) {
-        return;
-      }
-
-      uint64_t inputFrameID = 0;
-      float pulseDuration = 0.0f, pulseIntensity = 0.0f;
-      delegate->GetHapticFeedback(controller.index, inputFrameID, pulseDuration, pulseIntensity);
-      if (inputFrameID > 0 && pulseIntensity > 0.0f && pulseDuration > 0) {
-        if (controller.inputFrameID != inputFrameID) {
-          // When there is a new input frame id from haptic vibration,
-          // that means we start a new session for a vibration.
-          controller.inputFrameID = inputFrameID;
-          controller.remainingVibrateTime = pulseDuration;
-          controller.lastHapticUpdateTimeStamp = renderContext->GetTimestamp();
-        } else {
-          // We are still running the previous vibration.
-          // So, it needs to reduce the delta time from the last vibration.
-          const double timeStamp = renderContext->GetTimestamp();
-          controller.remainingVibrateTime -= (timeStamp - controller.lastHapticUpdateTimeStamp);
-          controller.lastHapticUpdateTimeStamp = timeStamp;
-        }
-
-        if (controller.remainingVibrateTime > 0.0f && renderMode == device::RenderMode::Immersive) {
-          // THe duration time unit needs to be transformed from milliseconds to microseconds.
-          // The gamepad extensions API does not yet have independent control
-          // of frequency and intensity. It only has vibration value (0.0 ~ 1.0).
-          // In this WaveVR SDK, the value makes more sense to be intensity because frequency can't
-          // < 1.0 here.
-          int intensity = ceil(pulseIntensity * 5);
-          intensity = intensity <= 5 ? intensity : 5;
-          WVR_TriggerVibration(controller.type, WVR_InputId_Max,
-                               controller.remainingVibrateTime * 1000.0f,
-                               1, WVR_Intensity(intensity));
-        } else {
-          // The remaining time is zero or exiting the immersive mode, stop the vibration.
-#if !defined(__arm__) // It will crash at WaveVR SDK arm32, let's skip it.
-          WVR_TriggerVibration(controller.type, WVR_InputId_Max, 0, 0, WVR_Intensity_Normal);
-#endif
-          controller.remainingVibrateTime = 0.0f;
-        }
-      } else if (controller.remainingVibrateTime > 0.0f) {
-        // While the haptic feedback is terminated from the client side,
-        // but it still have remaining time, we need to ask for stopping vibration.
-#if !defined(__arm__) // It will crash at WaveVR SDK arm32, let's skip it.
-        WVR_TriggerVibration(controller.type, WVR_InputId_Max, 0, 0, WVR_Intensity_Normal);
-#endif
-        controller.remainingVibrateTime = 0.0f;
       }
     }
   };
@@ -705,6 +419,9 @@ namespace crow {
 
   void
   DeviceDelegateWaveVR::SetRenderMode(const device::RenderMode aMode) {
+    m.handManager->setRenderMode(aMode);
+    m.controllerManager->setRenderMode(aMode);
+
     if (aMode == m.renderMode) {
       return;
     }
@@ -820,7 +537,7 @@ namespace crow {
     if (!m.delegate) {
       return;
     }
-    for (State::Controller &controller: m.controllers) {
+    for (Controller &controller: m.controllers) {
       VRB_LOG("Creating controller from SetControllerDelegate");
       m.CreateController(controller);
     }
@@ -833,15 +550,8 @@ namespace crow {
 
   int32_t
   DeviceDelegateWaveVR::GetControllerModelCount() const {
-    return 2;
+    return kMaxControllerCount; // two controllers, two hands
   }
-
-// #define VRB_WAVE_EVENT_LOG_ENABLED 1
-#if defined(VRB_WAVE_EVENT_LOG_ENABLED)
-#  define VRB_WAVE_EVENT_LOG(x) VRB_DEBUG(x)
-#else
-#  define VRB_WAVE_EVENT_LOG(x)
-#endif // VRB_WAVE_EVENT_DEBUG
 
   void
   DeviceDelegateWaveVR::ProcessEvents() {
@@ -919,7 +629,7 @@ namespace crow {
         case WVR_EventType_RecenterSuccess: {
           VRB_WAVE_EVENT_LOG("WVR_EventType_RecenterSuccess");
           WVR_InAppRecenter(WVR_RecenterType_YawAndPosition);
-          m.recentered = !m.ignoreNextRecenter;
+          m.controllerManager->setRecentered(!m.ignoreNextRecenter);
           m.ignoreNextRecenter = false;
           m.UpdateStandingMatrix();
         }
@@ -931,7 +641,7 @@ namespace crow {
         case WVR_EventType_RecenterSuccess3DoF: {
           VRB_WAVE_EVENT_LOG("WVR_EventType_RecenterSuccess_3DoF");
           WVR_InAppRecenter(WVR_RecenterType_YawAndPosition);
-          m.recentered = !m.ignoreNextRecenter;
+          m.controllerManager->setRecentered(!m.ignoreNextRecenter);
           m.ignoreNextRecenter = false;
         }
           break;
@@ -982,22 +692,6 @@ namespace crow {
     m.UpdateControllers();
   }
 
-  static inline vrb::Vector
-  GetDirection(const vrb::Vector &location, const vrb::Vector &head) {
-    vrb::Vector result = location - head;
-    result.y() = 0.0f;
-    result = result.Normalize();
-    return result;
-  }
-
-  static inline const char *
-  HandToString(ElbowModel::HandEnum hand) {
-    if (hand == ElbowModel::HandEnum::Right) {
-      return "Right";
-    }
-    return "Left";
-  }
-
   void
   DeviceDelegateWaveVR::StartFrame(const FramePrediction aPrediction) {
     VRB_GL_CHECK(glClearColor(m.clearColor.Red(), m.clearColor.Green(), m.clearColor.Blue(),
@@ -1012,7 +706,7 @@ namespace crow {
     if (m.devicePairs[WVR_DEVICE_HMD].pose.isValidPose) {
       hmd = vrb::Matrix::FromRowMajor(m.devicePairs[WVR_DEVICE_HMD].pose.poseMatrix.m);
       if (m.renderMode == device::RenderMode::StandAlone) {
-        if (m.recentered) {
+        if (m.controllerManager->isRecentered()) {
           m.reorientMatrix = DeviceUtils::CalculateReorientationMatrix(hmd, kAverageHeight);
         }
         hmd.TranslateInPlace(kAverageHeight);
@@ -1021,130 +715,36 @@ namespace crow {
       m.cameras[device::EyeIndex(device::Eye::Right)]->SetHeadTransform(hmd);
     }
 
-    m.recentered = false;
     if (!m.delegate) {
       return;
     }
 
-    const bool isLeftDeviceConnected = WVR_IsDeviceConnected(WVR_DeviceType_Controller_Left);
-    const bool isLeftHandController = m.mHandManager->isControllerAvailable(
-        WVR_DeviceType_Controller_Left);
+    for (Controller &controller: m.controllers) {
+      const WVR_DevicePosePair_t *devicePair = findDevicePair(controller.type);
 
-    const bool isRightDeviceConnected = WVR_IsDeviceConnected(WVR_DeviceType_Controller_Right);
-    const bool isRightHandController = m.mHandManager->isControllerAvailable(
-        WVR_DeviceType_Controller_Right);
-
-
-    for (uint32_t id = 0; id < 2; id++) {
-      const HandTypeEnum handType = static_cast<HandTypeEnum>(id);
-
-      if ((handType == Hand_Left && isLeftHandController) ||
-          (handType == Hand_Right && isRightHandController)) {
-        const int controllerId =
-            (handType == Hand_Left) == (m.controllers[0].type == WVR_DeviceType_Controller_Left) ? 0
-                                                                                                 : 1;
-        State::Controller &controller = m.controllers[controllerId];
-        controller.isEmulated = true;
-
-        Matrix4 rayMatrix = m.mHandManager->getHandMatrix(handType);
-        controller.enabled = true;
-        vrb::Matrix matrix = vrb::Matrix::FromColumnMajor(rayMatrix.get());
-        controller.transform = matrix;
-
-        if (m.renderMode == device::RenderMode::StandAlone) {
-          controller.transform.TranslateInPlace(kAverageHeight);
-        }
-        m.delegate->SetTransform(controller.index, controller.transform);
-      }
-    }
-
-    for (uint32_t id = WVR_DEVICE_HMD + 1; id < WVR_DEVICE_COUNT_LEVEL_1; id++) {
-      if ((m.devicePairs[id].type == WVR_DeviceType_Controller_Right && isRightDeviceConnected && !isRightHandController) ||
-          (m.devicePairs[id].type == WVR_DeviceType_Controller_Left && isLeftDeviceConnected && !isLeftHandController) ) {
-        const int controllerId = m.devicePairs[id].type == m.controllers[0].type ? 0 : 1;
-        UpdateController(controllerId, id, hmd);
-      }
-    }
-
-    HandsCalculate(hmd);
-  }
-
-  void
-  DeviceDelegateWaveVR::UpdateController(const int id, const uint32_t deviceId,
-                                         const vrb::Matrix hmd) {
-    State::Controller &controller = m.controllers[id];
-    controller.isEmulated = false;
-    if (!controller.enabled) {
-      return;
-    }
-    float level = WVR_GetDeviceBatteryPercentage(controller.type);
-    m.delegate->SetBatteryLevel(controller.index, (int) (level * 100.0f));
-    const WVR_PoseState_t &pose = m.devicePairs[deviceId].pose;
-    if (!pose.isValidPose) {
-      return;
-    }
-    controller.transform = vrb::Matrix::FromRowMajor(pose.poseMatrix.m);
-    if (m.elbow && !pose.is6DoFPose) {
-      ElbowModel::HandEnum hand = ElbowModel::HandEnum::Right;
-      if (m.devicePairs[deviceId].type == WVR_DeviceType_Controller_Left) {
-        hand = ElbowModel::HandEnum::Left;
-      }
-      controller.transform = m.elbow->GetTransform(hand, hmd, controller.transform);
-    } else if (m.renderMode == device::RenderMode::StandAlone) {
-      controller.transform.TranslateInPlace(kAverageHeight);
-    }
-    if (m.renderMode == device::RenderMode::Immersive && pose.is6DoFPose) {
-      static vrb::Matrix transform(vrb::Matrix::Identity());
-      if (transform.IsIdentity()) {
-        transform = vrb::Matrix::Rotation(vrb::Vector(1.0f, 0.0f, 0.0f), 0.70f);
-        const vrb::Matrix trans = vrb::Matrix::Position(vrb::Vector(0.0f, 0.0f, -0.01f));
-        transform = transform.PostMultiply(trans);
-      }
-      controller.transform = controller.transform.PostMultiply(transform);
-    }
-    m.delegate->SetTransform(controller.index, controller.transform);
-  }
-
-  void DeviceDelegateWaveVR::HandsCalculate(const vrb::Matrix hmd) {
-    if ((m.sixDoFControllerCount > 1) && !m.handsCalculated && m.delegate) {
-      State::Controller &first = m.controllers[0];
-      State::Controller &second = m.controllers[1];
-      const vrb::Vector firstPosition = first.transform.GetTranslation();
-      const vrb::Vector secondPosition = second.transform.GetTranslation();
-      if ((firstPosition - secondPosition).Magnitude() > FLT_EPSILON) {
-        const vrb::Vector headPosition = hmd.GetTranslation();
-        const vrb::Vector firstDirection = GetDirection(firstPosition, headPosition);
-        const vrb::Vector secondDirection = GetDirection(secondPosition, headPosition);
-        const vrb::Vector cross = firstDirection.Cross(secondDirection);
-        if (cross.Magnitude() > FLT_EPSILON) {
-          ElbowModel::HandEnum firstHand = ElbowModel::HandEnum::Right;
-          ElbowModel::HandEnum secondHand = ElbowModel::HandEnum::Left;
-          if (cross.y() < 0.0f) {
-            firstHand = ElbowModel::HandEnum::Left;
-            secondHand = ElbowModel::HandEnum::Right;
-          }
-          if (first.hand != firstHand) {
-            VRB_DEBUG("Controller reported as \"%s\" but is actually \"%s\"",
-                      HandToString(first.hand),
-                      HandToString(firstHand));
-            m.delegate->SetLeftHanded(first.index, firstHand == ElbowModel::HandEnum::Left);
-            first.hand = firstHand;
-          }
-          if (second.hand != secondHand) {
-            VRB_DEBUG("Controller reported as \"%s\" but is actually \"%s\"",
-                      HandToString(second.hand),
-                      HandToString(secondHand));
-            m.delegate->SetLeftHanded(second.index, secondHand == ElbowModel::HandEnum::Left);
-            second.hand = secondHand;
-          }
-          m.handsCalculated = true;
-        }
+      switch (controller.interactionMode) {
+        case WVR_InteractionMode_Hand:
+          m.handManager->updateHand(controller, *devicePair, hmd);
+          break;
+        case WVR_InteractionMode_Controller:
+          m.controllerManager->updateController(controller, *devicePair, hmd);
+          break;
+        default:
+          break;
       }
     }
   }
 
-  void
-  DeviceDelegateWaveVR::BindEye(const device::Eye aWhich) {
+  WVR_DevicePosePair_t *DeviceDelegateWaveVR::findDevicePair(WVR_DeviceType type) {
+    for (WVR_DevicePosePair_t &devicePair: m.devicePairs) {
+      if (devicePair.type == type) {
+        return &devicePair;
+      }
+    }
+    return nullptr;
+  }
+
+  void DeviceDelegateWaveVR::BindEye(const device::Eye aWhich) {
     if (m.currentFBO) {
       m.currentFBO->Unbind();
     }
@@ -1166,19 +766,11 @@ namespace crow {
     }
   }
 
-  void
-  DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
-    m.mHandManager->handleHandTrackingMechanism();
+  void DeviceDelegateWaveVR::EndFrame(const FrameEndMode aMode) {
 
     if (m.currentFBO) {
-//      VRB_DEBUG("Unbind FBO")
       m.currentFBO->Unbind();
       m.currentFBO = nullptr;
-    }
-    for (auto index = 0; index < 2; index++) {
-      vrb::CameraEyePtr cameraEyePtr = m.cameras[index];
-      m.mHandManager->updateAndRender(Hand_Left, cameraEyePtr);
-      m.mHandManager->updateAndRender(Hand_Right, cameraEyePtr);
     }
 
     m.lastSubmitDiscarded = aMode == DeviceDelegate::FrameEndMode::DISCARD;
@@ -1206,211 +798,13 @@ namespace crow {
       return nullptr;
     }
 
-    return [this, aModelIndex](vrb::CreationContextPtr &aContext) -> vrb::GroupPtr {
-      vrb::GroupPtr root = vrb::Group::Create(aContext);
-      auto hand = static_cast<ElbowModel::HandEnum>(aModelIndex);
+    const ControllerMetaInfo controllerMetaInfo = controllersInfo[aModelIndex];
 
-      // Load controller model from SDK
-      VRB_LOG("[WaveVR] (%p) Loading internal controller model: %d", this, aModelIndex);
-      WVR_DeviceType mCtrlerType =
-          hand == ElbowModel::HandEnum::Left ? WVR_DeviceType_Controller_Left
-                                             : WVR_DeviceType_Controller_Right;
-      {//Critical Section: Clear flag and cached parsed data.
-        std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
-        if (m.modelCachedData[aModelIndex] != nullptr) {
-          WVR_ReleaseControllerModel(
-              &m.modelCachedData[aModelIndex]); //we will clear cached data ptr to nullptr.
-        }
-        m.isModelDataReady[aModelIndex] = false;
-      }//Critical Section: Clear flag and cached parsed data.(End)
-      //2. Load ctrler model data.
-      WVR_Result result = WVR_GetCurrentControllerModel(mCtrlerType,
-                                                        &m.modelCachedData[aModelIndex]);
-      if (result == WVR_Success) {
-        {//Critical Section: Set data ready flag.
-          std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
-          VRB_LOG("[WaveVR] (%d[%p]) Controller model from the SDK successfully loaded: %d",
-                  mCtrlerType, this, hand)
-          m.isModelDataReady[aModelIndex] = true;
-        }//Critical Section: Set data ready flag.(End)
-      } else {
-        //MOHUS for Wave fix
-        mCtrlerType = WVR_DeviceType_Controller_Right;//WVR_DeviceType_HMD;
-        result = WVR_GetCurrentControllerModel(mCtrlerType, &m.modelCachedData[aModelIndex]);
-        if (result == WVR_Success) {
-          {//Critical Section: Set data ready flag.
-            std::lock_guard<std::mutex> lockGuard(m.mCachedDataMutex[aModelIndex]);
-            VRB_LOG(
-                "[WaveVR] (%d[%p]) Controller model from the SDK successfully loaded by second step: %d",
-                mCtrlerType, this, hand)
-            m.isModelDataReady[aModelIndex] = true;
-          }//Critical Section: Set data ready flag.(End)
-        } else {
-          VRB_LOG("[WaveVR] (%d[%p]): Load fail. Reason(%d)", mCtrlerType, this, result);
-        }
-      }
-
-      if (m.isModelDataReady[aModelIndex]) {
-        timespec start;
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-
-        // Initialize textures
-        WVR_CtrlerTexBitmapTable_t &comp_Textures = (*m.modelCachedData[aModelIndex]).bitmapInfos;
-        uint32_t wvrBitmapSize = comp_Textures.size;
-        std::vector<vrb::TextureGLPtr> mTextureTable(wvrBitmapSize);
-        VRB_LOG("[WaveVR] (%d[%p]): Initialize WVRTextures(%d)", mCtrlerType, this, wvrBitmapSize);
-        for (uint32_t texID = 0; texID < wvrBitmapSize; ++texID) {
-          vrb::TextureGLPtr texture = vrb::TextureGL::Create(aContext);
-          size_t texture_size =
-              comp_Textures.table[texID].stride * comp_Textures.table[texID].height;
-          std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(texture_size);
-          memcpy(data.get(), (void *) comp_Textures.table[texID].bitmap, texture_size);
-          texture->SetImageData(
-              data,
-              texture_size,
-              comp_Textures.table[texID].width,
-              comp_Textures.table[texID].height,
-              GL_RGBA
-          );
-          mTextureTable[texID] = texture;
-        }
-
-        VRB_LOG("[WaveVR] (%d[%p]): Initialize meshes(%d)", mCtrlerType, this,
-                (*m.modelCachedData[aModelIndex]).compInfos.size)
-        // Get only the body, we are not using other components right now.
-        for (uint32_t wvrCompID = 0;
-             wvrCompID < 1 /*(*m.modelCachedData).compInfos.size*/; ++wvrCompID) {
-          char *name = (*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].name;
-          vrb::VertexArrayPtr array = vrb::VertexArray::Create(aContext);
-
-          // Vertices
-
-          WVR_VertexBuffer_t &comp_Vertices = (*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].vertices;
-          if (comp_Vertices.buffer == nullptr || comp_Vertices.size == 0 ||
-              comp_Vertices.dimension == 0) {
-            VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", comp_Vertices.buffer,
-                    comp_Vertices.size, comp_Vertices.dimension);
-            return nullptr;
-          }
-
-          uint32_t vertices_dim = comp_Vertices.dimension;
-          if (vertices_dim == 3) {
-            for (auto i = 0; i < comp_Vertices.size; i += vertices_dim) {
-              auto vertex = vrb::Vector(comp_Vertices.buffer[i], comp_Vertices.buffer[i + 1],
-                                        comp_Vertices.buffer[i + 2]);
-              array->AppendVertex(vertex);
-            }
-          } else {
-            VRB_ERROR("[WaveVR] (%d[%p]): vertex with wrong dimension: %d", mCtrlerType, this,
-                      vertices_dim)
-          }
-
-          // Normals
-
-          WVR_VertexBuffer_t &comp_Normals = (*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].normals;
-          if (comp_Normals.buffer == nullptr || comp_Normals.size == 0 ||
-              comp_Normals.dimension == 0) {
-            VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", comp_Normals.buffer,
-                    comp_Normals.size, comp_Normals.dimension);
-            return nullptr;
-          }
-
-          uint32_t normals_dim = comp_Normals.dimension;
-          if (normals_dim == 3) {
-            for (auto i = 0; i < comp_Normals.size; i += normals_dim) {
-              auto normal = vrb::Vector(comp_Normals.buffer[i], comp_Normals.buffer[i + 1],
-                                        comp_Normals.buffer[i + 2]).Normalize();
-              array->AppendNormal(normal);
-            }
-          } else {
-            VRB_ERROR("[WaveVR] (%d[%p]): normal with wrong dimension: %d", mCtrlerType, this,
-                      normals_dim)
-          }
-
-          WVR_VertexBuffer_t &comp_TextCoord = (*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].texCoords;
-          if (comp_TextCoord.buffer == nullptr || comp_TextCoord.size == 0 ||
-              comp_TextCoord.dimension == 0) {
-            VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", comp_TextCoord.buffer,
-                    comp_TextCoord.size, comp_TextCoord.dimension);
-            return nullptr;
-          }
-
-          // UVs
-
-          uint32_t texCoords_dim = comp_TextCoord.dimension;
-          if (texCoords_dim == 2) {
-            for (auto i = 0; i < comp_TextCoord.size; i += texCoords_dim) {
-              auto textCoord = vrb::Vector(comp_TextCoord.buffer[i], comp_TextCoord.buffer[i + 1],
-                                           0);
-              array->AppendUV(textCoord);
-            }
-          } else {
-            VRB_ERROR("[WaveVR] (%d[%p]): normal with wrong dimension: %d", mCtrlerType, this,
-                      texCoords_dim)
-          }
-
-          vrb::ProgramPtr program = aContext->GetProgramFactory()->CreateProgram(aContext,
-                                                                                 vrb::FeatureTexture);
-          vrb::RenderStatePtr state = vrb::RenderState::Create(aContext);
-          state->SetProgram(program);
-          state->SetMaterial(
-              vrb::Color(1.0f, 1.0f, 1.0f),
-              vrb::Color(1.0f, 1.0f, 1.0f),
-              vrb::Color(0.0f, 0.0f, 0.0f),
-              0.0f);
-          state->SetLightsEnabled(false);
-          state->SetTexture(
-              mTextureTable[(*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].texIndex]);
-          vrb::GeometryPtr geometry = vrb::Geometry::Create(aContext);
-          geometry->SetName(name);
-          geometry->SetVertexArray(array);
-          geometry->SetRenderState(state);
-
-          // Indices
-
-          WVR_IndexBuffer_t &comp_Indices = (*m.modelCachedData[aModelIndex]).compInfos.table[wvrCompID].indices;
-          if (comp_Indices.buffer == nullptr || comp_Indices.size == 0 || comp_Indices.type == 0) {
-            VRB_ERROR("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", comp_Indices.buffer,
-                      comp_Indices.size, comp_Indices.type);
-            return nullptr;
-          }
-
-          uint32_t type = comp_Indices.type;
-          for (auto i = 0; i < comp_Indices.size; i += type) {
-            std::vector<int> indices;
-            for (auto j = 0; j < type; j++) {
-              indices.push_back(comp_Indices.buffer[i + j] + 1);
-            }
-            geometry->AddFace(indices, indices, indices);
-          }
-
-          root->AddNode(geometry);
-        }
-
-        timespec end;
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-        float time = (float) end.tv_sec + (((float) end.tv_nsec) / 1.0e9f) -
-                     ((float) start.tv_sec + (((float) start.tv_nsec) / 1.0e9f));
-
-        VRB_LOG("[WaveVR] (%d[%p]): Controller loaded in: %f", mCtrlerType, this, time)
-
-        return root;
-      } else {
-        return nullptr;
-      }
-    };
+    // TODO: support load hands models
+    return m.controllerManager->getControllerModelTask(controllerMetaInfo);
   }
 
-  //  void
-//  DeviceDelegateWaveVR::DirectDraw(const device::Eye aEye) {
-//    VRB_DEBUG("fftf DirectDraw()")
-//    vrb::CameraEyePtr cameraEyePtr = m.cameras[device::EyeIndex(aEye)];
-//    m.mHandManager->updateAndRender(Hand_Left, cameraEyePtr);
-//    m.mHandManager->updateAndRender(Hand_Right, cameraEyePtr);
-//  }
-//
-  bool
-  DeviceDelegateWaveVR::IsRunning() {
+  bool DeviceDelegateWaveVR::IsRunning() {
     return m.isRunning;
   }
 
@@ -1418,12 +812,6 @@ namespace crow {
 
   DeviceDelegateWaveVR::~DeviceDelegateWaveVR() {
     m.Shutdown();
-    for (auto index = 0; index < 2; index++) {
-      if (m.modelCachedData[index] != nullptr) {
-        WVR_ReleaseControllerModel(
-            &m.modelCachedData[index]); //we will clear cached data ptr to nullptr.
-      }
-    }
   }
 
 } // namespace crow

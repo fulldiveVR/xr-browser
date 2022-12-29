@@ -53,6 +53,7 @@ target_sources(
     PUBLIC
     src/wavevr/cpp/native-lib.cpp
     src/wavevr/cpp/Context.cpp
+    src/wavevr/cpp/ControllerManager.cpp
     src/wavevr/cpp/HandManager.cpp
     src/wavevr/cpp/HandModel.cpp
     src/wavevr/cpp/HandObj.cpp
