@@ -40,6 +40,7 @@ struct ControllerContainer::State {
   uint64_t lastImmersiveFrameId;
   ModelLoaderAndroidPtr loader;
   std::vector<vrb::LoadTask> loadTask;
+  float *matrices = nullptr;
 
   void Initialize(vrb::CreationContextPtr& aContext) {
     context = aContext;
@@ -599,6 +600,19 @@ ControllerContainer::SetVisible(const bool aVisible) {
 void
 ControllerContainer::SetGazeModeIndex(const int32_t aControllerIndex) {
   m.gazeIndex = aControllerIndex;
+}
+
+void ControllerContainer::SetSkeletonMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) {
+  GroupPtr model = m.models[aControllerIndex];
+  for(int i = 0; i < model->GetNodeCount(); i++) {
+    if(name == model->GetNode(i)->GetName()){
+      GeometryPtr geometry = std::dynamic_pointer_cast<vrb::Geometry>(model->GetNode(i));
+      if (geometry) {
+        geometry->GetRenderState()->SetSkeletonMatrices(matrices);
+      }
+      break;
+    }
+  }
 }
 
 void

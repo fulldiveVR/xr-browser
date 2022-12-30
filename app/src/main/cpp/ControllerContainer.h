@@ -68,6 +68,7 @@ public:
   bool IsVisible() const override;
   void SetVisible(const bool aVisible) override;
   void SetGazeModeIndex(const int32_t aControllerIndex) override;
+  void SetSkeletonMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) override;
   void SetFrameId(const uint64_t aFrameId);
 protected:
   struct State;

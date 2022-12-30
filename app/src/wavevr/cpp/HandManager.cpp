@@ -18,7 +18,9 @@
 #include "vrb/Color.h"
 
 namespace crow {
+  static const std::string kHandGeometryName = "HandGeometry";
   static const int32_t kControllerCount = 2;  // Left, Right
+  static const uint16_t kBonesCount = 48;
   static const vrb::Color kWhiteColor = vrb::Color(1.0f, 1.0f, 1.0f);
   static const vrb::Color kBlackColor = vrb::Color(0.0f, 0.0f, 0.0f);
   static const vrb::Color kBlueColor = vrb::Color(29.0f / 255.0f, 189.0f / 255.0f, 247.0f / 255.0f);
@@ -153,10 +155,6 @@ namespace crow {
   }
 
   void HandManager::update() {
-//  for (uint32_t hID = 0; hID < Hand_MaxNumber; ++hID) {
-//    mHandObjs[hID] = new HandObj(this, static_cast<HandTypeEnum>(hID));
-////      mHandObjs[hID]->initializeGraphicsSystem()
-//  }
     if (WVR_IsDeviceConnected(WVR_DeviceType_NaturalHand_Left) ||
         WVR_IsDeviceConnected(WVR_DeviceType_NaturalHand_Right)) {
       if (!mStartFlag) {
@@ -215,31 +213,6 @@ namespace crow {
   }
 
 
-  void HandManager::updateAndRender(HandTypeEnum handMode, vrb::CameraEyePtr cameraEyePtr) {
-    WVR_Vector3f_t trackingScale = (handMode == Hand_Left) ? mHandTrackingData.left.scale
-                                                           : mHandTrackingData.right.scale;
-
-//    if (handMode == Hand_Right) {
-//        trackingScale.v[0] = 1.0f;
-//        trackingScale.v[1] = 1.0f;
-//        trackingScale.v[2] = 1.0f;
-//    }
-
-//  if (mHandObjs[handMode] != nullptr && mIsHandPoseValids[handMode]) {
-//    mHandObjs[handMode]->updateSkeleton(
-//        mJointMats[handMode],
-//        Vector3(trackingScale.v[0], trackingScale.v[1], trackingScale.v[2])
-//    );
-
-//    mHandObjs[handMode]->render(
-//        mProjectionMatrix,
-//        mEyeMatrix,
-//        mHeadMatrix,
-//        mHandPoseMats[handMode]
-//    );
-//}
-  }
-
   void HandManager::calculateHandMatrices() {
     WVR_Result result = WVR_GetHandTrackingData(
         WVR_HandTrackerType_Natural,
@@ -287,11 +260,9 @@ namespace crow {
           mTrackingType == WVR_HandTrackerType_Natural) {
         Vector3 rayUp(mHandPoseMats[handType][4], mHandPoseMats[handType][5],
                       mHandPoseMats[handType][6]);
-//      Vector3 rayUp(0.0, 1.0, 0.0);
         rayUp.normalize();
         Vector3 rayOri(handPose->pinch.origin.v);
-        Vector3 negRayF = Vector3(handPose->pinch.direction.v);
-//      Vector3 negRayF = (Vector3(handPose->pinch.direction.v) * -1.0f);
+        Vector3 negRayF = Vector3(handPose->pinch.direction.v) * -1.0f;
         mHandRayMats[handType] = Matrix_LookAtFrom(rayOri, negRayF, rayUp);
       }
     }
@@ -332,21 +303,6 @@ namespace crow {
     return mIsHandPoseValids[Hand_Right];
   }
 
-  void HandManager::loadHandModelAsync() {
-//  std::lock_guard<std::mutex> lck(mGraphicsChangedMutex);
-//  LOGI("T(%d): loadHandModelAsync Begin(CSBegin)", mTrackingType);
-//
-//  if (renderModel != nullptr) {
-////    mHandObjs[Hand_Left]->loadModel(&(*renderModel).left);
-////    mHandObjs[Hand_Right]->loadModel(&(*renderModel).right);
-////    mHandAlphaTex = Texture::loadTextureFromBitmapWithoutCached((*renderModel).handAlphaTex);
-////    mHandObjs[Hand_Left]->setTexture(mHandAlphaTex);
-////    mHandObjs[Hand_Right]->setTexture(mHandAlphaTex);
-//
-//  }
-    LOGI("T(%d): loadHandModelAsync End(CSEnd)", mTrackingType);
-  }
-
   void HandManager::setRenderMode(const device::RenderMode mode) {
     renderMode = mode;
   }
@@ -359,10 +315,28 @@ namespace crow {
 
     controller.transform = getRayMatrix(controller.hand);
 
+    //TODO: fix code below
+    const int handIndex = int(controller.hand);
+    auto jointMat = mJointMats[handIndex];
+
+    Matrix4 wristPose = jointMat[HandBone_Wrist];
+    auto wristPoseInv = Matrix4(wristPose);
+    wristPoseInv.invert();
+
+    Matrix4 matrix4;
+    matrix4.identity();
+    for (uint32_t jointID = 0; jointID < sMaxSupportJointNumbers; ++jointID) {
+//      matrix4 = (wristPoseInv * jointMat[jointID]); // convert to model space.
+      matrix4 = wristPose; // tmp
+      memcpy(mSkeletonMatrices[handIndex] + jointID * 16, matrix4.get(), 16 * sizeof(GLfloat));
+    }
+
     if (renderMode == device::RenderMode::StandAlone) {
       controller.transform.TranslateInPlace(kAverageHeight);
     }
+
     delegate->SetTransform(controller.index, controller.transform);
+    delegate->SetSkeletonMatrices(controller.index, kHandGeometryName, mSkeletonMatrices[handIndex]);
   }
 
   void HandManager::updateHandState(Controller &controller) {
@@ -492,20 +466,65 @@ namespace crow {
                   texCoordsComponents)
       }
 
+      // Bones
+      WVR_BoneIDBuffer_t &boneIds = handModel.boneIDs;
+      if (boneIds.buffer == nullptr || boneIds.size == 0 ||
+          boneIds.dimension == 0) {
+        VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", boneIds.buffer,
+                boneIds.size, boneIds.dimension);
+        return nullptr;
+      }
+
+      uint32_t boneIdsComponents = boneIds.dimension;
+      if (boneIdsComponents == 4) {
+        for (uint32_t i = 0; i < boneIds.size; i += boneIdsComponents) {
+          auto boneId = vrb::Color((float) boneIds.buffer[i], (float) boneIds.buffer[i + 1],
+                                   (float) boneIds.buffer[i + 2], (float) boneIds.buffer[i + 3]);
+          array->AppendBonesIds(boneId);
+        }
+      } else {
+        VRB_ERROR("[WaveVR] (%p) [%d]: BIs with wrong dimension: %d", this,
+                  controllerMetaInfo.type,
+                  boneIdsComponents)
+      }
+
+      WVR_VertexBuffer_t &boneWeights = handModel.boneWeights;
+      if (boneWeights.buffer == nullptr || boneWeights.size == 0 ||
+          boneWeights.dimension == 0) {
+        VRB_LOG("Parameter invalid!!! iData(%p), iSize(%u), iType(%u)", boneWeights.buffer,
+                boneWeights.size, boneWeights.dimension);
+        return nullptr;
+      }
+
+      uint32_t boneWeightsComponents = boneWeights.dimension;
+      if (boneWeightsComponents == 4) {
+        for (uint32_t i = 0; i < boneWeights.size; i += boneWeightsComponents) {
+          auto boneWeight = vrb::Color(boneWeights.buffer[i], boneWeights.buffer[i + 1],
+                                       boneWeights.buffer[i + 2], boneWeights.buffer[i + 3]);
+          array->AppendBonesWeights(boneWeight);
+        }
+      } else {
+        VRB_ERROR("[WaveVR] (%p) [%d]: BWs with wrong dimension: %d", this,
+                  controllerMetaInfo.type,
+                  boneWeightsComponents)
+      }
+
       // Shaders
       // TODO: Use shader for hands
       vrb::ProgramPtr program = aContext->GetProgramFactory()->CreateProgram(aContext,
                                                                              vrb::FeatureTexture,
-                                                                             GetHandDepthFragment());
+                                                                             GetHandDepthFragment(),
+                                                                             kBonesCount);
       vrb::RenderStatePtr state = vrb::RenderState::Create(aContext);
       state->SetProgram(program);
       state->SetLightsEnabled(false);
       state->SetTintColor(kBlueColor);
       state->SetTexture(mTexture);
+      state->SetBonesCount(kBonesCount);
 
       // Geometry
       vrb::GeometryPtr geometry = vrb::Geometry::Create(aContext);
-      geometry->SetName("HandGeometry");
+      geometry->SetName(kHandGeometryName);
       geometry->SetVertexArray(array);
       geometry->SetRenderState(state);
 
@@ -523,9 +542,9 @@ namespace crow {
         for (uint32_t j = 0; j < type; j++) {
           indicesVector.push_back((int) (indices.buffer[i + j] + 1));
         }
-        geometry->AddFace(indicesVector, indicesVector, indicesVector);
+        geometry->AddFace(indicesVector, indicesVector, indicesVector, indicesVector,
+                          indicesVector);
       }
-
       root->AddNode(geometry);
 
       return root;

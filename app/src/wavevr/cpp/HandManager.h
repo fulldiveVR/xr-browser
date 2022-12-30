@@ -51,18 +51,12 @@ namespace crow {
     void updateHandState(Controller &controller);
 
   public:
-    void updateAndRender(HandTypeEnum handMode, vrb::CameraEyePtr cameraEyePtr);
-
-  public:
     void update();
 
   protected:
     void startHandTracking();
 
     void stopHandTracking();
-
-  protected:
-    void loadHandModelAsync();
 
   public:
     void calculateHandMatrices();
@@ -96,6 +90,9 @@ namespace crow {
   protected:
     Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
     Matrix4 mHandPoseMats[Hand_MaxNumber];
+    Matrix4 mSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //tracking data in model space.
+    float mSkeletonMatrices[Hand_MaxNumber][16 * sMaxSupportJointNumbers];
+
     bool mIsHandPoseValids[Hand_MaxNumber];
   protected:
     Matrix4 mHandRayMats[Hand_MaxNumber];
