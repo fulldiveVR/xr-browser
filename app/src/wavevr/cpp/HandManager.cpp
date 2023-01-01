@@ -16,6 +16,7 @@
 #include "vrb/CreationContext.h"
 #include "vrb/RenderState.h"
 #include "vrb/Color.h"
+#include "vrb/Vector4.h"
 
 namespace crow {
   static const std::string kHandGeometryName = "HandGeometry";
@@ -132,19 +133,10 @@ namespace crow {
   }
 
   void HandManager::onCreate() {
-//  for (uint32_t hID = 0; hID < Hand_MaxNumber; ++hID) {
-//    mHandObjs[hID] = new HandObj(this, static_cast<HandTypeEnum>(hID));
-//  }
   }
 
   void HandManager::onDestroy() {
     stopHandTracking();
-
-//  for (uint32_t hID = 0; hID < Hand_MaxNumber; ++hID) {
-//    mHandObjs[hID]->releaseGraphicsSystem();
-//    delete mHandObjs[hID];
-//    mHandObjs[hID] = nullptr;
-//  }
 
     mTexture = nullptr;
 
@@ -318,17 +310,31 @@ namespace crow {
     //TODO: fix code below
     const int handIndex = int(controller.hand);
     auto jointMat = mJointMats[handIndex];
+    auto skeletonMat = mSkeletonMatrices[handIndex];
 
     Matrix4 wristPose = jointMat[HandBone_Wrist];
     auto wristPoseInv = Matrix4(wristPose);
     wristPoseInv.invert();
 
+    Matrix4 index1Pose = jointMat[HandBone_IndexJoint1];
+    auto index1PoseInv = Matrix4(index1Pose);
+    index1PoseInv.invert();
+
+    auto blockSize1 = 16 * sizeof(float);
+    auto blockSize2 = 16;
     Matrix4 matrix4;
     matrix4.identity();
+
+    // TODO: Work in progress...
     for (uint32_t jointID = 0; jointID < sMaxSupportJointNumbers; ++jointID) {
 //      matrix4 = (wristPoseInv * jointMat[jointID]); // convert to model space.
-      matrix4 = wristPose; // tmp
-      memcpy(mSkeletonMatrices[handIndex] + jointID * 16, matrix4.get(), 16 * sizeof(GLfloat));
+      if (jointID == HandBone_IndexJoint2) {
+//        matrix4 = jointMat[jointID];
+        matrix4 = index1PoseInv * jointMat[HandBone_IndexJoint2];
+      } else {
+        matrix4.identity();
+      }
+      memcpy(skeletonMat + jointID * blockSize2, matrix4.get(), blockSize1);
     }
 
     if (renderMode == device::RenderMode::StandAlone) {
@@ -336,7 +342,7 @@ namespace crow {
     }
 
     delegate->SetTransform(controller.index, controller.transform);
-    delegate->SetSkeletonMatrices(controller.index, kHandGeometryName, mSkeletonMatrices[handIndex]);
+    delegate->SetSkeletonMatrices(controller.index, kHandGeometryName, skeletonMat);
   }
 
   void HandManager::updateHandState(Controller &controller) {
@@ -478,9 +484,10 @@ namespace crow {
       uint32_t boneIdsComponents = boneIds.dimension;
       if (boneIdsComponents == 4) {
         for (uint32_t i = 0; i < boneIds.size; i += boneIdsComponents) {
-          auto boneId = vrb::Color((float) boneIds.buffer[i], (float) boneIds.buffer[i + 1],
-                                   (float) boneIds.buffer[i + 2], (float) boneIds.buffer[i + 3]);
+          auto boneId = vrb::Vector4((float) boneIds.buffer[i], (float) boneIds.buffer[i + 1],
+                                     (float) boneIds.buffer[i + 2], (float) boneIds.buffer[i + 3]);
           array->AppendBonesIds(boneId);
+          VRB_DEBUG("fftf, boneid [%d/%d]: %s", i, HandBone_MaxNumber, boneId.ToString().c_str())
         }
       } else {
         VRB_ERROR("[WaveVR] (%p) [%d]: BIs with wrong dimension: %d", this,
@@ -499,8 +506,8 @@ namespace crow {
       uint32_t boneWeightsComponents = boneWeights.dimension;
       if (boneWeightsComponents == 4) {
         for (uint32_t i = 0; i < boneWeights.size; i += boneWeightsComponents) {
-          auto boneWeight = vrb::Color(boneWeights.buffer[i], boneWeights.buffer[i + 1],
-                                       boneWeights.buffer[i + 2], boneWeights.buffer[i + 3]);
+          auto boneWeight = vrb::Vector4(boneWeights.buffer[i], boneWeights.buffer[i + 1],
+                                         boneWeights.buffer[i + 2], boneWeights.buffer[i + 3]);
           array->AppendBonesWeights(boneWeight);
         }
       } else {
