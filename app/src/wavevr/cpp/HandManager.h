@@ -70,7 +70,8 @@ namespace crow {
 
     vrb::Matrix getRayMatrix(const crow::ElbowModel::HandEnum hand);
 
-
+    Vector4 calculateJointWorldPosition(const int handIndex, uint32_t jID) const;
+    Vector3 getModelJointLocalPosition(const int handIndex, uint32_t iJointID) const;
   private:
     crow::ControllerDelegatePtr &delegate;
     device::RenderMode renderMode;
@@ -88,10 +89,25 @@ namespace crow {
   protected:
     bool mIsPrintedSkeErrLog[Hand_MaxNumber];
   protected:
+
+    Matrix4 mSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //tracking data in model space.
+    Matrix4 mModelSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //final skinned input.
+    Matrix4 mFinalSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //final joint mat in model space.
+    float mSkeletonMatrices[Hand_MaxNumber][16 * sMaxSupportJointNumbers];
+
+    Matrix4 mJointInvTransMats[Hand_MaxNumber][sMaxSupportJointNumbers];
+    Matrix4 mJointTransMats[Hand_MaxNumber][sMaxSupportJointNumbers];
+    Matrix4 mJointLocalTransMats[Hand_MaxNumber][sMaxSupportJointNumbers];
+    uint32_t mJointParentTable[Hand_MaxNumber][sMaxSupportJointNumbers];
+    int32_t mJointUsageTable[Hand_MaxNumber][sMaxSupportJointNumbers]; //0 means we don't use it.
+
     Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
     Matrix4 mHandPoseMats[Hand_MaxNumber];
-    Matrix4 mSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //tracking data in model space.
-    float mSkeletonMatrices[Hand_MaxNumber][16 * sMaxSupportJointNumbers];
+//    Matrix4 mSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //tracking data in model space.
+//    float mSkeletonMatrices[Hand_MaxNumber][16 * sMaxSupportJointNumbers];
+//    Matrix4 mJointInvTransMats[Hand_MaxNumber][sMaxSupportJointNumbers]; // todo
+//    int32_t mJointParentTable[Hand_MaxNumber][sMaxSupportJointNumbers]; // todo
+//    int32_t mJointUsageTable[Hand_MaxNumber][sMaxSupportJointNumbers]; //0 means we don't use it. // todo
 
     bool mIsHandPoseValids[Hand_MaxNumber];
   protected:
