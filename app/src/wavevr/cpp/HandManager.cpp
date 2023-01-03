@@ -569,7 +569,7 @@ namespace crow {
       state->SetLightsEnabled(false);
       state->SetTintColor(kBlueColor);
       state->SetTexture(mTexture);
-      state->SetBonesCount(sMaxSupportJointNumbers);
+      state->SetJointsCount(sMaxSupportJointNumbers);
 
       // Geometry
       vrb::GeometryPtr geometry = vrb::Geometry::Create(aContext);
