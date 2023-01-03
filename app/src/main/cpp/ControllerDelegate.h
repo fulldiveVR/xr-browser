@@ -65,7 +65,7 @@ public:
   virtual bool IsVisible() const = 0;
   virtual void SetVisible(const bool aVisible) = 0;
   virtual void SetGazeModeIndex(const int32_t aControllerIndex) = 0;
-  virtual void SetSkeletonMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) = 0;
+  virtual void SetJointsMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) = 0;
 protected:
   ControllerDelegate() {}
 private:

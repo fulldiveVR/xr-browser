@@ -341,7 +341,7 @@ namespace crow {
     }
 
     delegate->SetTransform(controller.index, controller.transform);
-    delegate->SetSkeletonMatrices(controller.index, kHandGeometryName, skeletonMatrices);
+    delegate->SetJointsMatrices(controller.index, kHandGeometryName, skeletonMatrices);
   }
 
   void HandManager::updateHandState(Controller &controller) {

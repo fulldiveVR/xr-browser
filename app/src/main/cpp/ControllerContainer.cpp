@@ -602,13 +602,13 @@ ControllerContainer::SetGazeModeIndex(const int32_t aControllerIndex) {
   m.gazeIndex = aControllerIndex;
 }
 
-void ControllerContainer::SetSkeletonMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) {
+void ControllerContainer::SetJointsMatrices(const int32_t aControllerIndex, const std::string name, const float *matrices) {
   GroupPtr model = m.models[aControllerIndex];
   for(int i = 0; i < model->GetNodeCount(); i++) {
     if(name == model->GetNode(i)->GetName()){
       GeometryPtr geometry = std::dynamic_pointer_cast<vrb::Geometry>(model->GetNode(i));
       if (geometry) {
-        geometry->GetRenderState()->SetSkeletonMatrices(matrices);
+        geometry->GetRenderState()->SetJointsMatrices(matrices);
       }
       break;
     }
