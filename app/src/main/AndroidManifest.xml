@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.igalia.wolvic">
     <uses-feature android:glEsVersion="0x00030000"/>
 
@@ -48,6 +49,9 @@
                 <data android:mimeType="text/plain"/>
             </intent-filter>
         </activity>
+
+        <activity android:name="mozilla.telemetry.glean.debug.GleanDebugActivity" tools:node="remove" />
+
         <service
             android:name="com.igalia.wolvic.crashreporting.CrashReporterService"
             android:exported="false"
