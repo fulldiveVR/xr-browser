@@ -52,7 +52,23 @@ target_sources(
     native-lib
     PUBLIC
     src/wavevr/cpp/native-lib.cpp
+    src/wavevr/cpp/Context.cpp
+    src/wavevr/cpp/ControllerManager.cpp
+    src/wavevr/cpp/HandManager.cpp
+    src/wavevr/cpp/HandModel.cpp
+    src/wavevr/cpp/HandObj.cpp
+    src/wavevr/cpp/HandsShaders.cpp
     src/wavevr/cpp/DeviceDelegateWaveVR.cpp
+    src/wavevr/cpp/object/FrameBufferObject.cpp
+    src/wavevr/cpp/object/Mesh.cpp
+    src/wavevr/cpp/object/Object.cpp
+    src/wavevr/cpp/object/Shader.cpp
+    src/wavevr/cpp/object/Texture.cpp
+    src/wavevr/cpp/object/VertexArrayObject.cpp
+    src/wavevr/cpp/shared/Matrices.cpp
+    src/wavevr/cpp/shared/matrix.c
+    src/wavevr/cpp/shared/quat.c
+    src/wavevr/cpp/shared/vector.c
     )
 elseif(PICOVR)
 target_sources(
@@ -223,6 +239,7 @@ target_link_libraries( # Specifies the target library.
                        # included in the NDK.
                        ${log-lib}
                        ${android-lib}
+                       jnigraphics
                        EGL
                        GLESv3
                       )
