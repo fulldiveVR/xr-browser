@@ -7,6 +7,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fulldive.encoder.AESUtils;
+import com.fulldive.encoder.TagReader;
 import com.igalia.wolvic.BuildConfig;
 import com.igalia.wolvic.ui.widgets.dialogs.VoiceSearchWidget;
 import com.igalia.wolvic.utils.LocaleUtils;
@@ -20,12 +22,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
+import mozilla.components.support.ktx.kotlin.ByteArrayKt;
+
 public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionListener {
 
     private Context mContext;
 
     protected final String LOGTAG = SystemUtils.createLogtag(this.getClass());
     private MKSpeechService mkSpeechService;
+    private TagReader mTagReader;
     private @Nullable
     SpeechRecognizer.Callback mCallback;
     private static int MAX_CLIPPING = 10000;
@@ -50,7 +55,7 @@ public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionL
             "es-ES", "es-UY", "es-US", "sv-SE", "th-TH"
     );
 
-    private static final String DEBUG_API_KEY = "WOLVIC_DEBUG";
+    private static final byte[] DEBUG_API_KEY = new byte[] {(byte)0xBC, (byte)0xA9, (byte)0x1B, (byte)0xD1, (byte)0xA8, (byte)0xAB, (byte)0x28, (byte)0x8D, (byte)0xDF, (byte)0x03, (byte)0x4D, (byte)0x65, (byte)0xBE, (byte)0x09, (byte)0xD6, (byte)0xD2};
 
     public MKSpeechRecognizer(Context context) {
         mContext = context;
@@ -59,11 +64,12 @@ public class MKSpeechRecognizer implements SpeechRecognizer, ISpeechRecognitionL
     @Override
     public void start(@NonNull Settings settings, @NonNull Callback callback) {
         mkSpeechService = MKSpeechService.getInstance();
+        mTagReader = TagReader.Companion.getInstance();
         mCallback = callback;
         mkSpeechService.addListener(this);
-        String key = BuildConfig.MK_API_KEY;
+        String key = mTagReader.read(BuildConfig.MK_API_KEY);
         if (StringUtils.isEmpty(key)) {
-            key = DEBUG_API_KEY;
+            key = mTagReader.read(AESUtils.Companion.toHex(DEBUG_API_KEY));
         }
 
         // locale set by the app's configuration

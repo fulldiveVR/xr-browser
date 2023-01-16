@@ -24,12 +24,12 @@ import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
 
+import com.fulldive.encoder.TagReader;
 import com.huawei.hms.analytics.HiAnalytics;
 import com.huawei.hms.analytics.HiAnalyticsInstance;
 import com.huawei.hms.analytics.HiAnalyticsTools;
 import com.huawei.hms.mlsdk.common.MLApplication;
 import com.huawei.hms.push.RemoteMessage;
-import com.huawei.hvr.LibUpdateClient;
 import com.igalia.wolvic.browser.PermissionDelegate;
 import com.igalia.wolvic.browser.SettingsStore;
 import com.igalia.wolvic.speech.SpeechRecognizer;
@@ -54,6 +54,7 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
     private Dialog mActiveDialog;
     private SharedPreferences mPrefs;
     private BroadcastReceiver mHmsMessageBroadcastReceiver;
+    private TagReader mTagReader;
 
     static {
         Log.i(TAG, "LoadLibrary");
@@ -91,6 +92,7 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
         Log.i(TAG, "PlatformActivity onCreate");
         super.onCreate(savedInstanceState);
         mContext = this;
+        mTagReader = TagReader.Companion.getInstance();
         mLocationManager = new HVRLocationManager(this);
         PermissionDelegate.sPlatformLocationOverride = session -> mLocationManager.start(session);
 
@@ -99,7 +101,7 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
             HiAnalyticsTools.enableLog();
         }
         HiAnalyticsInstance instance = HiAnalytics.getInstance(getApplicationContext());
-        instance.setUserProfile("userKey", BuildConfig.HVR_API_KEY);
+        instance.setUserProfile("userKey", mTagReader.read(BuildConfig.HVR_API_KEY));
 
         mHmsMessageBroadcastReceiver = new BroadcastReceiver() {
             @Override
@@ -241,7 +243,6 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
         setContentView(mView);
 
         mView.getHolder().addCallback(this);
-        new LibUpdateClient(this).runUpdate();
         nativeOnCreate();
 
         initializeAGConnect();
@@ -254,7 +255,7 @@ public class PlatformActivity extends Activity implements SurfaceHolder.Callback
                 Log.e(TAG, "HVR API key is not available");
                 return;
             }
-            MLApplication.getInstance().setApiKey(BuildConfig.HVR_API_KEY);
+            MLApplication.getInstance().setApiKey(mTagReader.read(BuildConfig.HVR_API_KEY));
             TelemetryService.setService(new HVRTelemetry(this));
             try {
                 SpeechRecognizer speechRecognizer = SpeechServices.getInstance(this, speechService);

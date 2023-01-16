@@ -48,7 +48,6 @@ import androidx.lifecycle.ViewModelStore;
 import androidx.lifecycle.ViewModelStoreOwner;
 
 import com.igalia.wolvic.audio.AudioEngine;
-import com.igalia.wolvic.browser.Accounts;
 import com.igalia.wolvic.browser.PermissionDelegate;
 import com.igalia.wolvic.browser.SettingsStore;
 import com.igalia.wolvic.browser.api.WRuntime;
@@ -84,7 +83,6 @@ import com.igalia.wolvic.ui.widgets.dialogs.LegalDocumentDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.PromptDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.SendTabDialogWidget;
 import com.igalia.wolvic.ui.widgets.dialogs.WhatsNewWidget;
-import com.igalia.wolvic.ui.widgets.menus.VideoProjectionMenuWidget;
 import com.igalia.wolvic.utils.BitmapCache;
 import com.igalia.wolvic.utils.ConnectivityReceiver;
 import com.igalia.wolvic.utils.DeviceType;
@@ -1761,7 +1759,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     @Override
-//    public void showVRVideo(final int aWindowHandle, final @VideoProjectionMenuWidget.VideoProjectionFlags int aVideoProjection) {
     public void showVRVideo(final int aWindowHandle, final int aVideoProjection) {
         queueRunnable(() -> showVRVideoNative(aWindowHandle, aVideoProjection));
     }
