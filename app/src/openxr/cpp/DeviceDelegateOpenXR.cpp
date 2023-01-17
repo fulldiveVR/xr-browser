@@ -99,6 +99,25 @@ struct DeviceDelegateOpenXR::State {
   std::optional<XrPosef> firstPose;
   bool mHandTrackingSupported = false;
 
+  bool IsPositionTrackingSupported() {
+      CHECK(system != XR_NULL_SYSTEM_ID);
+      CHECK(instance != XR_NULL_HANDLE);
+      return systemProperties.trackingProperties.positionTracking == XR_TRUE;
+  }
+
+  // This might require more sophisticated code to properly detect specific hardware. That was
+  // easy to do with propietary SDKs but it's a bit more difficult with OpenXR.
+  void InitializeDeviceType() {
+      VRB_LOG("Initializing device %s from vendor %d", systemProperties.systemName, systemProperties.vendorId);
+#if OCULUSVR
+      deviceType = device::OculusQuest2;
+#elif HVR
+      deviceType = IsPositionTrackingSupported() ? device::HVR6DoF : device::HVR3DoF;
+#elif PICOXR
+      deviceType = device::PicoXR;
+#endif
+  }
+
   void Initialize() {
 #ifdef PICOXR
     deviceType = device::PicoXR;
@@ -202,6 +221,8 @@ struct DeviceDelegateOpenXR::State {
 
     mHandTrackingSupported = handTrackingProperties.supportsHandTracking;
     VRB_LOG("OpenXR runtime %s hand tracking", mHandTrackingSupported ? "does support" : "doesn't support");
+
+    InitializeDeviceType();
   }
 
   // xrGet*GraphicsRequirementsKHR check must be called prior to xrCreateSession
@@ -425,20 +446,32 @@ struct DeviceDelegateOpenXR::State {
     return nullptr;
   }
 
+  const char* GetDefaultInteractionProfilePath() {
+#if OCULUSVR
+      return OculusTouch.path;
+#elif PICOXR
+      return Pico4.path;
+#else
+      return nullptr;
+#endif
+  }
+
   void BeginXRSession() {
       XrSessionBeginInfo sessionBeginInfo{XR_TYPE_SESSION_BEGIN_INFO};
       sessionBeginInfo.primaryViewConfigurationType = viewConfigType;
       CHECK_XRCMD(xrBeginSession(session, &sessionBeginInfo));
       vrReady = true;
 
-      if (mHandTrackingSupported && input) {
-        input->UpdateInteractionProfile(*controller, OculusTouch.path);
-        if (controllersReadyCallback && input->AreControllersReady()) {
-           controllersReadyCallback();
-           controllersReadyCallback = nullptr;
-        }
+      // If hand tracking is supported, we want to emulate a default interaction
+      // profile, so that if Wolvic is launched without controllers active, we can
+      // still use hand tracking for emulating the controllers.
+      // This is a temporary situation while we don't implement WebXR hand tracking
+      // APIs.
+      if (mHandTrackingSupported) {
+          if (const char* defaultProfilePath = GetDefaultInteractionProfilePath())
+              UpdateInteractionProfile(defaultProfilePath);
       }
-    }
+  }
 
   void HandleSessionEvent(const XrEventDataSessionStateChanged& event) {
     VRB_LOG("OpenXR XrEventDataSessionStateChanged: state %s->%s session=%p time=%ld",
@@ -535,6 +568,17 @@ struct DeviceDelegateOpenXR::State {
     }
 
     // TODO: Check if activity globarRef needs to be released
+  }
+
+  void UpdateInteractionProfile(const char* emulateProfile = nullptr) {
+      if (!input || !controller)
+          return;
+
+      input->UpdateInteractionProfile(*controller, emulateProfile);
+      if (controllersReadyCallback && input->AreControllersReady()) {
+          controllersReadyCallback();
+          controllersReadyCallback = nullptr;
+      }
   }
 };
 
@@ -639,7 +683,7 @@ DeviceDelegateOpenXR::GetControllerModelName(const int32_t aModelIndex) const {
 bool
 DeviceDelegateOpenXR::IsPositionTrackingSupported() const {
   // returns true for 6DoF controllers
-    return m.systemProperties.trackingProperties.positionTracking == XR_TRUE;
+  return m.IsPositionTrackingSupported();
 }
 
 void
@@ -680,13 +724,7 @@ DeviceDelegateOpenXR::ProcessEvents() {
         return;
       }
       case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
-        if (m.input) {
-          m.input->UpdateInteractionProfile(*m.controller, nullptr);
-          if (m.controllersReadyCallback && m.input->AreControllersReady()) {
-            m.controllersReadyCallback();
-            m.controllersReadyCallback = nullptr;
-          }
-        }
+        m.UpdateInteractionProfile();
         break;
       }
       case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
@@ -898,6 +936,21 @@ DeviceDelegateOpenXR::EndFrame(const FrameEndMode aEndMode) {
   std::vector<const XrCompositionLayerBaseHeader*>& layers = m.frameEndLayers;
   layers.clear();
 
+  // This limit is valid at least for Pico and Meta.
+  auto submitEndFrame = [&layers, displayTime, session = m.session]() {
+      static int i = 0;
+      XrFrameEndInfo frameEndInfo{XR_TYPE_FRAME_END_INFO};
+      frameEndInfo.displayTime = displayTime;
+      frameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+      frameEndInfo.layerCount = (uint32_t) layers.size();
+      frameEndInfo.layers = layers.data();
+      CHECK_XRCMD(xrEndFrame(session, &frameEndInfo));
+  };
+
+  auto canAddLayers = [&layers, maxLayers = m.systemProperties.graphicsProperties.maxLayerCount]() {
+      return layers.size() < maxLayers;
+  };
+
   // Add skybox layer
   if (m.cubeLayer && m.cubeLayer->IsLoaded() && m.cubeLayer->IsDrawRequested()) {
     m.cubeLayer->Update(m.localSpace, predictedPose, XR_NULL_HANDLE);
@@ -923,13 +976,18 @@ DeviceDelegateOpenXR::EndFrame(const FrameEndMode aEndMode) {
 
   // Add back UI layers
   for (const OpenXRLayerPtr& layer: m.uiLayers) {
-    if (!layer->GetDrawInFront() && layer->IsDrawRequested()) {
+    if (!layer->GetDrawInFront() && layer->IsDrawRequested() && canAddLayers()) {
       layer->Update(m.layersSpace, predictedPose, XR_NULL_HANDLE);
-      for (uint32_t i = 0; i < layer->HeaderCount(); ++i) {
+      for (uint32_t i = 0; i < layer->HeaderCount() && canAddLayers(); ++i) {
         layers.push_back(layer->Header(i));
       }
       layer->ClearRequestDraw();
     }
+  }
+
+  if (!canAddLayers()) {
+      submitEndFrame();
+      return;
   }
 
   // Add main eye buffer layer
@@ -953,21 +1011,16 @@ DeviceDelegateOpenXR::EndFrame(const FrameEndMode aEndMode) {
 
   // Add front UI layers
   for (const OpenXRLayerPtr& layer: m.uiLayers) {
-    if (layer->GetDrawInFront() && layer->IsDrawRequested()) {
+    if (layer->GetDrawInFront() && layer->IsDrawRequested() && canAddLayers()) {
       layer->Update(m.layersSpace, predictedPose, XR_NULL_HANDLE);
-      for (uint32_t i = 0; i < layer->HeaderCount(); ++i) {
+      for (uint32_t i = 0; i < layer->HeaderCount() && canAddLayers(); ++i) {
         layers.push_back(layer->Header(i));
       }
       layer->ClearRequestDraw();
     }
   }
 
-  XrFrameEndInfo frameEndInfo{XR_TYPE_FRAME_END_INFO};
-  frameEndInfo.displayTime = displayTime;
-  frameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-  frameEndInfo.layerCount = (uint32_t )layers.size();
-  frameEndInfo.layers = layers.data();
-  CHECK_XRCMD(xrEndFrame(m.session, &frameEndInfo));
+  submitEndFrame();
 }
 
 VRLayerQuadPtr

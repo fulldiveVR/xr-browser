@@ -881,8 +881,6 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
         }
     }
 
-
-
     public void loadUri(String aUri) {
         loadUri(aUri, WSession.LOAD_FLAGS_NONE);
     }
@@ -1618,6 +1616,24 @@ public class Session implements WContentBlocking.Delegate, WSession.NavigationDe
             return mPromptDelegate.onLoginSave(aSession, autocompleteRequest);
         }
         return WResult.fromValue(autocompleteRequest.dismiss());
+    }
+
+    @Nullable
+    @Override
+    public WResult<PromptResponse> onSharePrompt(@NonNull WSession aSession, @NonNull SharePrompt prompt) {
+        if (mPromptDelegate != null) {
+            return mPromptDelegate.onSharePrompt(aSession, prompt);
+        }
+        return WResult.fromValue(prompt.dismiss());
+    }
+
+    @Nullable
+    @Override
+    public WResult<PromptResponse> onRepostConfirmPrompt(@NonNull WSession aSession, @NonNull RepostConfirmPrompt prompt) {
+        if (mPromptDelegate != null) {
+            return mPromptDelegate.onRepostConfirmPrompt(aSession, prompt);
+        }
+        return WResult.fromValue(prompt.dismiss());
     }
 
     // HistoryDelegate

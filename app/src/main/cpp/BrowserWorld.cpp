@@ -777,7 +777,7 @@ BrowserWorld::State::UpdateWidgetCylinder(const WidgetPtr& aWidget, const float 
     aWidget->SetCylinderDensity(aDensity);
   } else if (useCylinder && !aWidget->GetCylinder()) {
     VRLayerSurfacePtr moveLayer = aWidget->GetLayer();
-    VRLayerCylinderPtr layer = device->CreateLayerCylinder(moveLayer);
+    VRLayerCylinderPtr layer = aWidget->GetPlacement()->layer ? device->CreateLayerCylinder(moveLayer) : nullptr;
     CylinderPtr cylinder = Cylinder::Create(create, layer);
     aWidget->SetCylinder(cylinder);
     aWidget->SetCylinderDensity(aDensity);
@@ -785,7 +785,7 @@ BrowserWorld::State::UpdateWidgetCylinder(const WidgetPtr& aWidget, const float 
     float w = 0, h = 0;
     aWidget->GetWorldSize(w, h);
     VRLayerSurfacePtr moveLayer = aWidget->GetLayer();
-    VRLayerQuadPtr layer = device->CreateLayerQuad(moveLayer);
+    VRLayerQuadPtr layer = aWidget->GetPlacement()->layer ? device->CreateLayerQuad(moveLayer) : nullptr;
     QuadPtr quad = Quad::Create(create, w, h, layer);
     aWidget->SetQuad(quad);
   }
@@ -1183,17 +1183,13 @@ BrowserWorld::AddWidget(int32_t aHandle, const WidgetPlacementPtr& aPlacement) {
 
   WidgetPtr widget;
   if (aPlacement->cylinder && m.cylinderDensity > 0) {
-    VRLayerCylinderPtr layer = m.device->CreateLayerCylinder(textureWidth, textureHeight, VRLayerQuad::SurfaceType::AndroidSurface);
+    VRLayerCylinderPtr layer = aPlacement->layer ? m.device->CreateLayerCylinder(textureWidth, textureHeight, VRLayerQuad::SurfaceType::AndroidSurface) : nullptr;
     CylinderPtr cylinder = Cylinder::Create(m.create, layer);
     widget = Widget::Create(m.context, aHandle, aPlacement, textureWidth, textureHeight, (int32_t)worldWidth, (int32_t)worldHeight, cylinder);
   }
 
   if (!widget) {
-    VRLayerQuadPtr layer;
-    if (aPlacement->layer) {
-      layer = m.device->CreateLayerQuad(textureWidth, textureHeight, VRLayerQuad::SurfaceType::AndroidSurface);
-    }
-
+    VRLayerQuadPtr layer = aPlacement->layer ? m.device->CreateLayerQuad(textureWidth, textureHeight, VRLayerQuad::SurfaceType::AndroidSurface) : nullptr;
     QuadPtr quad = Quad::Create(m.create, worldWidth, worldHeight, layer);
     widget = Widget::Create(m.context, aHandle, aPlacement, textureWidth, textureHeight, quad);
   }
@@ -1775,6 +1771,9 @@ BrowserWorld::CreateSkyBox(const std::string& aBasePath, const std::string& aExt
   if (extension == ".ktx") {
 #if defined(OPENXR) && defined(OCULUSVR)
     glFormat =  GL_COMPRESSED_SRGB8_ETC2;
+#elif defined(PICOXR)
+    // FIXME: Pico does not support compressed textures yet.
+    glFormat = GL_RGBA8;
 #else
     glFormat =  GL_COMPRESSED_RGB8_ETC2;
 #endif
@@ -1794,23 +1793,6 @@ BrowserWorld::CreateSkyBox(const std::string& aBasePath, const std::string& aExt
     m.skybox = Skybox::Create(m.create, layer);
     m.rootOpaqueParent->AddNode(m.skybox->GetRoot());
     m.skybox->Load(m.loader, aBasePath, extension);
-  }
-}
-
-void BrowserWorld::CreateEnvironment() {
-  ASSERT_ON_RENDER_THREAD();
-  m.rootEnvironment = Transform::Create(m.create);
-  m.rootEnvironment->AddLight(Light::Create(m.create));
-
-  vrb::TransformPtr model = Transform::Create(m.create);
-  m.loader->LoadModel("FirefoxPlatform2_low.obj", model);
-  m.rootEnvironment->AddNode(model);
-  vrb::Matrix transform = vrb::Matrix::Identity();
-  model->SetTransform(transform);
-
-  m.layerEnvironment = m.device->CreateLayerProjection(VRLayerSurface::SurfaceType::FBO);
-  if (m.layerEnvironment) {
-    m.rootEnvironment->AddNode(VRLayerNode::Create(m.create, m.layerEnvironment));
   }
 }
 
@@ -1953,6 +1935,14 @@ JNI_METHOD(void, runCallbackNative)
   if (aCallback) {
     auto func = reinterpret_cast<std::function<void()> *>((uintptr_t)aCallback);
     (*func)();
+    delete func;
+  }
+}
+
+JNI_METHOD(void, deleteCallbackNative)
+(JNIEnv*, jobject, jlong aCallback) {
+  if (aCallback) {
+    auto func = reinterpret_cast<std::function<void()> *>((uintptr_t)aCallback);
     delete func;
   }
 }

@@ -580,7 +580,39 @@ void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode,
     bool ringPinching = (mAimState.status & XR_HAND_TRACKING_AIM_RING_PINCHING_BIT_FB) != 0;
     delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_APP,
                             device::kImmersiveButtonThumbrest, ringPinching, ringPinching, 1.0);
+// Prepare and submit hand joint locations data for rendering
+    assert(mHasHandJoints);
+    std::vector<vrb::Matrix> jointTransforms;
+    jointTransforms.resize(mHandJoints.size());
+#if defined(OCULUSVR)
+    const vrb::Vector handPosition{
+            -mAimState.aimPose.position.x,
+            -mAimState.aimPose.position.y,
+            -mAimState.aimPose.position.z,
+    };
+#endif
+    for (int i = 0; i < mHandJoints.size(); i++) {
+        vrb::Matrix transform = XrPoseToMatrix(mHandJoints[i].pose);
+        if (mHandJoints[i].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
+#if defined(OCULUSVR)
+            // On Quest devices we need to apply a correction to the joint location
+            // based on the position from the aim pose, otherwise the hand joints
+            // end up shifted from where the hand actually is. This is likely a bug
+            // in the SDK.
+            transform.TranslateInPlace(handPosition);
+#endif
+            float radius = mHandJoints[i].radius;
+            vrb::Matrix scale = vrb::Matrix::Identity().ScaleInPlace(vrb::Vector(radius, radius, radius));
+            transform.PostMultiplyInPlace(scale);
+        } else {
+            // This effectively hides the joint.
+            transform.ScaleInPlace(vrb::Vector(0.0f, 0.0f, 0.0f));
+        }
 
+        memcpy(&jointTransforms[i], &transform, sizeof(vrb::Matrix));
+    }
+    delegate.SetHandJointLocations(mIndex, jointTransforms);
+    delegate.SetHandVisible(mIndex, true);
 }
 
 void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, float offsetY, device::RenderMode renderMode, ControllerDelegate& delegate)
@@ -631,6 +663,7 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
 
     delegate.SetEnabled(mIndex, true);
     delegate.SetModelVisible(mIndex, true);
+    delegate.SetHandVisible(mIndex, false);
 
     device::CapabilityFlags flags = device::Orientation;
     vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);
@@ -802,6 +835,19 @@ XrResult OpenXRInputSource::UpdateInteractionProfile(ControllerDelegate& delegat
                 numHaptics++;
         }
         delegate.SetHapticCount(mIndex, numHaptics);
+
+        // On emulated profiles we need to set the button count here because it
+        // may never be set during Update() (e.g, when hand tracking is active).
+        if (emulateProfile) {
+            int buttonCount { 0 };
+            for (auto &button: mActiveMapping->buttons) {
+                if ((button.hand & mHandeness) == 0) {
+                    continue;
+                }
+                buttonCount++;
+            }
+            delegate.SetButtonCount(mIndex, buttonCount);
+        }
     }
 
     return XR_SUCCESS;
