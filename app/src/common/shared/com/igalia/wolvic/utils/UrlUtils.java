@@ -8,6 +8,7 @@ package com.igalia.wolvic.utils;
 import android.content.Context;
 import android.net.Uri;
 import android.util.Base64;
+import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,7 @@ public class UrlUtils {
 
     private static List<String> ENGINE_SUPPORTED_SCHEMES = Arrays.asList(null, "about", "data", "file", "ftp", "http", "https", "moz-extension", "moz-safe-about", "resource", "view-source", "ws", "wss", "blob");
 
+    public static String UNKNOWN_MIME_TYPE = "application/octet-stream";
     private static String ourCachedHomePageStartPart = null;
 
     public static String stripCommonSubdomains(@Nullable String host) {
@@ -154,6 +156,15 @@ public class UrlUtils {
 
     public static Boolean isBlankUri(@Nullable Context context, @Nullable String aUri) {
         return context != null && aUri != null && aUri.equals(context.getString(R.string.about_blank));
+    }
+
+    public static String getMimeTypeFromUrl(String url) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(url);
+        if (extension == null) {
+            return UNKNOWN_MIME_TYPE;
+        } else {
+            return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        }
     }
 
     public static String titleBarUrl(@Nullable String aUri) {
