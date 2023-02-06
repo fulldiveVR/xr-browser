@@ -5,6 +5,7 @@
 
 package com.igalia.wolvic;
 
+import com.fulldive.encoder.AESUtils;
 import com.htc.vr.sdk.VRActivity;
 
 import android.Manifest;
@@ -12,11 +13,14 @@ import android.content.res.AssetManager;
 import android.os.Bundle;
 import android.view.KeyEvent;
 
-import com.igalia.wolvic.utils.DeviceType;
 import com.igalia.wolvic.utils.SystemUtils;
+import com.fulldive.encoder.TagReader;
+import android.util.Log;
 
 public class PlatformActivity extends VRActivity {
     static String LOGTAG = SystemUtils.createLogtag(PlatformActivity.class);
+    private TagReader mTagReader;
+    private static final byte[] DEBUG_API_KEY = new byte[] {(byte)0xBC, (byte)0xA9, (byte)0x1B, (byte)0xD1, (byte)0xA8, (byte)0xAB, (byte)0x28, (byte)0x8D, (byte)0xDF, (byte)0x03, (byte)0x4D, (byte)0x65, (byte)0xBE, (byte)0x09, (byte)0xD6, (byte)0xD2};
 
     public static boolean filterPermission(final String aPermission) {
         if (aPermission.equals(Manifest.permission.CAMERA)) {
@@ -39,6 +43,15 @@ public class PlatformActivity extends VRActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        mTagReader = TagReader.Companion.getInstance();
+
+        try {
+            mTagReader.read(AESUtils.Companion.toHex(DEBUG_API_KEY));
+        }catch (Exception ex){
+            ex.printStackTrace();
+            Log.e("fftf", ex.getMessage());
+        }
 
         queueRunnable(new Runnable() {
             @Override

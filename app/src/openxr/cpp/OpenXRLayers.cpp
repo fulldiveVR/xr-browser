@@ -38,13 +38,18 @@ OpenXRLayerQuad::Update(XrSpace aSpace, const XrPosef &aPose, XrSwapchain aClear
 
   for (int i = 0; i < xrLayers.size(); ++i) {
     device::Eye eye = i == 0 ? device::Eye::Left : device::Eye::Right;
+#if PICOXR
+    // Seems like Pico does not properly use the layerSpace.
+    xrLayers[i].pose =  MatrixToXrPose(layer->GetModelTransform(eye).Translate(-kAverageHeight));
+#else
     xrLayers[i].pose =  MatrixToXrPose(layer->GetModelTransform(eye));
+#endif
     xrLayers[i].size.width = layer->GetWorldWidth();
-    xrLayers[i].size.height = -layer->GetWorldHeight();
+    xrLayers[i].size.height = layer->GetWorldHeight();
     device::EyeRect rect = layer->GetTextureRect(eye);
     xrLayers[i].subImage.swapchain = swapchain->SwapChain();
     xrLayers[i].subImage.imageArrayIndex = 0;
-    xrLayers[i].subImage.imageRect = GetRect(layer->GetWidth(), layer->GetHeight(), rect);
+    xrLayers[i].subImage.imageRect = GetRect(swapchain->Width(), swapchain->Height(), rect);
   }
 }
 
@@ -73,16 +78,24 @@ OpenXRLayerCylinder::Update(XrSpace aSpace, const XrPosef &aPose, XrSwapchain aC
 
   for (int i = 0; i < xrLayers.size(); ++i) {
     device::Eye eye = i == 0 ? device::Eye::Left : device::Eye::Right;
-    vrb::Matrix matrix = XrPoseToMatrix(aPose).PostMultiply(layer->GetModelTransform(eye));
-    xrLayers[i].pose = MatrixToXrPose(matrix);
+
+    auto scale = layer->GetModelTransform(eye).GetScale();
+    auto model = layer->GetModelTransform(eye).Scale({1/scale.x(), 1/scale.y(), 1/scale.z()});
+#if PICOXR
+    // Seems like Pico does not properly use the layerSpace.
+    model = model.Translate(-kAverageHeight);
+#endif
+    xrLayers[i].pose.position = MatrixToXrPose(model).position;
+    xrLayers[i].pose.orientation = MatrixToXrPose(layer->GetRotation()).orientation;
+
     xrLayers[i].radius = layer->GetRadius();
     // See Cylinder.cpp: texScaleX = M_PI / theta;
     xrLayers[i].centralAngle = (float) M_PI / layer->GetUVTransform(eye).GetScale().x();
-    xrLayers[i].aspectRatio = layer->GetWorldWidth() / layer->GetWorldHeight();
+    xrLayers[i].aspectRatio = (float) layer->GetWidth() / layer->GetHeight();
     device::EyeRect rect = layer->GetTextureRect(device::Eye::Left);
     xrLayers[i].subImage.swapchain = swapchain->SwapChain();
     xrLayers[i].subImage.imageArrayIndex = 0;
-    xrLayers[i].subImage.imageRect = GetRect(layer->GetWidth(), layer->GetHeight(), rect);
+    xrLayers[i].subImage.imageRect = GetRect(swapchain->Width(), swapchain->Height(), rect);
   }
 }
 
@@ -152,11 +165,10 @@ OpenXRLayerCube::Update(XrSpace aSpace, const XrPosef &aPose, XrSwapchain aClear
 // OpenXRLayerEquirect;
 
 OpenXRLayerEquirectPtr
-OpenXRLayerEquirect::Create(const VRLayerEquirectPtr& aLayer, const OpenXRLayerPtr& aSourceLayer, bool aVerticalFlip) {
+OpenXRLayerEquirect::Create(const VRLayerEquirectPtr& aLayer, const OpenXRLayerPtr& aSourceLayer) {
   auto result = std::make_shared<OpenXRLayerEquirect>();
   result->layer = aLayer;
   result->sourceLayer = aSourceLayer;
-  result->mVerticalFlip = aVerticalFlip;
   return result;
 }
 
@@ -167,15 +179,10 @@ OpenXRLayerEquirect::Init(JNIEnv * aEnv, XrSession session, vrb::RenderContextPt
     return;
   }
   swapchain = source->GetSwapChain();
-  if (mVerticalFlip) {
-      mLayerImageLayout.type = XR_TYPE_COMPOSITION_LAYER_IMAGE_LAYOUT_FB;
-      mLayerImageLayout.flags = XR_COMPOSITION_LAYER_IMAGE_LAYOUT_VERTICAL_FLIP_BIT_FB;
-      mLayerImageLayout.next = XR_NULL_HANDLE;
-  }
-  for (auto& xrLayer: xrLayers) {
-    xrLayer = {XR_TYPE_COMPOSITION_LAYER_EQUIRECT_KHR};
-    xrLayer.next = mVerticalFlip ? &mLayerImageLayout : XR_NULL_HANDLE;
-  }
+
+  for (auto& xrLayer: xrLayers)
+    xrLayer = { XR_TYPE_COMPOSITION_LAYER_EQUIRECT_KHR };
+
   OpenXRLayerBase<VRLayerEquirectPtr, XrCompositionLayerEquirectKHR>::Init(aEnv, session, aContext);
 }
 
@@ -224,5 +231,11 @@ OpenXRLayerEquirect::Update(XrSpace aSpace, const XrPosef &aPose, XrSwapchain aC
   }
 }
 
+#if OCULUSVR
+const void*
+OpenXRLayerEquirect::GetNextStructureInChain() const {
+    return this->nextStructureInChain;
+}
+#endif
 
 }

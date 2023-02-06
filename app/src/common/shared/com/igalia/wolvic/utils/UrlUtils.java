@@ -8,6 +8,7 @@ package com.igalia.wolvic.utils;
 import android.content.Context;
 import android.net.Uri;
 import android.util.Base64;
+import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,8 @@ public class UrlUtils {
 
     private static List<String> ENGINE_SUPPORTED_SCHEMES = Arrays.asList(null, "about", "data", "file", "ftp", "http", "https", "moz-extension", "moz-safe-about", "resource", "view-source", "ws", "wss", "blob");
 
+    public static String UNKNOWN_MIME_TYPE = "application/octet-stream";
+    public static String EXTENSION_MIME_TYPE = "application/x-xpinstall";
     private static String ourCachedHomePageStartPart = null;
 
     public static String stripCommonSubdomains(@Nullable String host) {
@@ -149,11 +152,19 @@ public class UrlUtils {
     }
 
     public static Boolean isBlobUri(@Nullable String aUri) {
-        return aUri != null && aUri.startsWith("blob");
+        return aUri != null && aUri.startsWith("blob:");
     }
 
     public static Boolean isBlankUri(@Nullable Context context, @Nullable String aUri) {
         return context != null && aUri != null && aUri.equals(context.getString(R.string.about_blank));
+    }
+
+    public static @NonNull String getMimeTypeFromUrl(String url) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(url);
+        if (StringUtils.isEmpty(extension))
+            return UNKNOWN_MIME_TYPE;
+        String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        return StringUtils.isEmpty(mimeType) ? UNKNOWN_MIME_TYPE : mimeType;
     }
 
     public static String titleBarUrl(@Nullable String aUri) {

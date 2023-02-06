@@ -9,11 +9,14 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.net.Uri;
+import android.os.Build;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.databinding.DataBindingUtil;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -23,7 +26,9 @@ import com.igalia.wolvic.R;
 import com.igalia.wolvic.VRBrowserActivity;
 import com.igalia.wolvic.browser.SettingsStore;
 import com.igalia.wolvic.browser.engine.SessionStore;
+import com.igalia.wolvic.browser.extensions.LocalExtension;
 import com.igalia.wolvic.databinding.DownloadsBinding;
+import com.igalia.wolvic.downloads.CopyToContentUriCallback;
 import com.igalia.wolvic.downloads.Download;
 import com.igalia.wolvic.downloads.DownloadsManager;
 import com.igalia.wolvic.telemetry.TelemetryService;
@@ -40,9 +45,11 @@ import com.igalia.wolvic.ui.widgets.menus.library.DownloadsContextMenuWidget;
 import com.igalia.wolvic.ui.widgets.menus.library.LibraryContextMenuWidget;
 import com.igalia.wolvic.ui.widgets.menus.library.SortingContextMenuWidget;
 import com.igalia.wolvic.utils.SystemUtils;
+import com.igalia.wolvic.utils.UrlUtils;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class DownloadsView extends LibraryView implements DownloadsManager.DownloadsListener {
@@ -136,10 +143,39 @@ public class DownloadsView extends LibraryView implements DownloadsManager.Downl
         public void onClick(@NonNull View view, @NonNull Download item) {
             mBinding.downloadsList.requestFocusFromTouch();
 
-            SessionStore.get().getActiveSession().loadUri(item.getOutputFileUri());
+            if (item.getMediaType().equals(UrlUtils.EXTENSION_MIME_TYPE)) {
+                if (SettingsStore.getInstance(getContext()).isLocalAddonAllowed()) {
+                    mWidgetManager.getFocusedWindow().showConfirmPrompt(
+                            getContext().getString(R.string.download_addon_install),
+                            item.getFilename(),
+                            new String[]{
+                                    getContext().getString(R.string.download_addon_install_cancel),
+                                    getContext().getString(R.string.download_addon_install_confirm_install),
+                            },
+                            (index, isChecked) -> {
+                                if (index == PromptDialogWidget.POSITIVE) {
+                                    LocalExtension.install(
+                                            SessionStore.get().getWebExtensionRuntime(),
+                                            UUID.randomUUID().toString(),
+                                            item.getOutputFileUri(),
+                                            ((VRBrowserActivity) getContext()).getServicesProvider().getAddons()
+                                    );
+                                }
+                            }
+                    );
+                } else {
+                    mWidgetManager.getFocusedWindow().showAlert(
+                            getContext().getString(R.string.download_addon_install_blocked),
+                            getContext().getString(R.string.download_addon_install_blocked_body),
+                            null
+                    );
+                }
+            } else {
+                SessionStore.get().getActiveSession().loadUri(item.getOutputFileUri());
 
-            WindowWidget window = mWidgetManager.getFocusedWindow();
-            window.hidePanel();
+                WindowWidget window = mWidgetManager.getFocusedWindow();
+                window.hidePanel();
+            }
         }
 
         @Override
@@ -210,6 +246,9 @@ public class DownloadsView extends LibraryView implements DownloadsManager.Downl
 
         @Override
         public void onShowContextMenu(@NonNull View view, Download item, boolean isLastVisibleItem) {
+            boolean canCopyToContentUri = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    && mDownloadsManager.getContentUriForDownloadedFile(item) == null;
+
             showContextMenu(
                     view,
                     new DownloadsContextMenuWidget(getContext(),
@@ -217,7 +256,8 @@ public class DownloadsView extends LibraryView implements DownloadsManager.Downl
                                     item.getOutputFileUri(),
                                     item.getTitle(),
                                     item.getId()),
-                            mWidgetManager.canOpenNewWindow()),
+                            mWidgetManager.canOpenNewWindow(),
+                            canCopyToContentUri),
                     mCallback,
                     isLastVisibleItem);
         }
@@ -230,6 +270,26 @@ public class DownloadsView extends LibraryView implements DownloadsManager.Downl
         @Override
         public void onShowSortingContextMenu(@NonNull View view) {
             showSortingContextMenu(view);
+        }
+    };
+
+    private CopyToContentUriCallback mCopyToContentUriCallback = new CopyToContentUriCallback() {
+        @Override
+        public void onSuccess(Uri uri, boolean isNewUri) {
+            mWidgetManager.getFocusedWindow().showAlert(
+                    getContext().getString(R.string.download_copy_to_content_uri_success_title),
+                    getContext().getString(R.string.download_copy_to_content_uri_success_body),
+                    null);
+        }
+
+        @Override
+        public void onFailure(Download download) {
+            String errorBody = (download != null) ?
+                    getContext().getString(R.string.download_copy_to_content_uri_error_body_v1, download.getFilename()) :
+                    getContext().getString(R.string.download_copy_to_content_uri_error_body);
+
+            mWidgetManager.getFocusedWindow().showAlert(
+                    getContext().getString(R.string.download_copy_to_content_uri_error_title), errorBody, null);
         }
     };
 
@@ -273,6 +333,19 @@ public class DownloadsView extends LibraryView implements DownloadsManager.Downl
             mWidgetManager.openNewTabForeground(item.getUrl());
             TelemetryService.Tabs.openedCounter(TelemetryService.Tabs.TabSource.DOWNLOADS);
             hideContextMenu();
+        }
+
+        @RequiresApi(api = Build.VERSION_CODES.Q)
+        @Override
+        public void onCopyToContentUri(DownloadsContextMenuWidget.DownloadsContextMenuItem item) {
+            mWidgetManager.getFocusedWindow().showConfirmPrompt(
+                    getContext().getString(R.string.download_copy_to_content_uri_confirm_title),
+                    getContext().getString(R.string.download_copy_to_content_uri_confirm_body),
+                    new String[]{getContext().getString(R.string.cancel_button),
+                            getContext().getString(R.string.ok_button)},
+                    (index, isChecked) -> {
+                        mDownloadsManager.copyToContentUri(item.getDownloadsId(), mCopyToContentUriCallback);
+                    });
         }
 
         @Override

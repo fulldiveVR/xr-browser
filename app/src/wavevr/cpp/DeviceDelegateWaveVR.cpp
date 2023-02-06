@@ -83,7 +83,6 @@ namespace crow {
     vrb::Matrix reorientMatrix;
     bool ignoreNextRecenter;
     int32_t sixDoFControllerCount;
-    bool handsCalculated;
 
     HandManager *handManager;
     ControllerManager *controllerManager;
@@ -93,8 +92,8 @@ namespace crow {
           renderMode(device::RenderMode::StandAlone), leftFBOIndex(0), rightFBOIndex(0),
           leftTextureQueue(nullptr), rightTextureQueue(nullptr), renderWidth(0), renderHeight(0),
           devicePairs{}, controllers{}, deviceType(device::UnknownType), lastSubmitDiscarded(false),
-          ignoreNextRecenter(false), sixDoFControllerCount(0),
-          handsCalculated(false) {
+          ignoreNextRecenter(false), sixDoFControllerCount(0), handManager(nullptr)
+          {
       memset((void *) devicePairs, 0, sizeof(WVR_DevicePosePair_t) * kMaxControllerCount);
 
       gestures = GestureDelegate::Create();
@@ -196,8 +195,12 @@ namespace crow {
       WVR_SetInputRequest(WVR_DeviceType_Controller_Left, inputIdAndTypes,
                           sizeof(inputIdAndTypes) / sizeof(*inputIdAndTypes));
 
-      handManager = new HandManager(WVR_HandTrackerType_Natural, delegate);
-      handManager->onCreate();
+      uint64_t supported = WVR_GetSupportedFeatures();
+
+      if(supported & WVR_SupportedFeature_HandTracking) {
+        handManager = new HandManager(WVR_HandTrackerType_Natural, delegate);
+        handManager->onCreate();
+      }
       controllerManager = new ControllerManager(delegate, context);
       controllerManager->onCreate();
     }
@@ -332,7 +335,9 @@ namespace crow {
 
       const WVR_InteractionMode interactionMode = WVR_GetInteractionMode();
 
-      handManager->update();
+      if(handManager != nullptr) {
+        handManager->update();
+      }
 
       for (Controller &controller: controllers) {
         const bool is6DoF = WVR_GetDegreeOfFreedom(controller.type) == WVR_NumDoF_6DoF;
@@ -374,7 +379,9 @@ namespace crow {
         }
 
         if (controller.interactionMode == WVR_InteractionMode_Hand) {
-          handManager->updateHandState(controller);
+          if(handManager != nullptr) {
+            handManager->updateHandState(controller);
+          }
         } else {
           controllerManager->updateControllerState(controller);
         }
@@ -419,15 +426,13 @@ namespace crow {
 
   void
   DeviceDelegateWaveVR::SetRenderMode(const device::RenderMode aMode) {
-    m.handManager->setRenderMode(aMode);
+    if(m.handManager != nullptr) {
+      m.handManager->setRenderMode(aMode);
+    }
     m.controllerManager->setRenderMode(aMode);
 
     if (aMode == m.renderMode) {
       return;
-    }
-    // To make sure assigning correct hands before entering immersive mode.
-    if (aMode == device::RenderMode::Immersive) {
-      m.handsCalculated = false;
     }
 
     m.renderMode = aMode;
@@ -724,7 +729,9 @@ namespace crow {
 
       switch (controller.interactionMode) {
         case WVR_InteractionMode_Hand:
-          m.handManager->updateHand(controller, *devicePair, hmd);
+          if(m.handManager != nullptr) {
+            m.handManager->updateHand(controller, *devicePair, hmd);
+          }
           break;
         case WVR_InteractionMode_Controller:
           m.controllerManager->updateController(controller, *devicePair, hmd);
@@ -801,7 +808,11 @@ namespace crow {
     const ControllerMetaInfo controllerMetaInfo = controllersInfo[aModelIndex];
 
     if (controllerMetaInfo.interactiveMode == WVR_InteractionMode_Hand) {
-      return m.handManager->getHandModelTask(controllerMetaInfo);
+      if(m.handManager != nullptr) {
+        return m.handManager->getHandModelTask(controllerMetaInfo);
+      } else {
+        return nullptr;
+      }
     }
     return m.controllerManager->getControllerModelTask(controllerMetaInfo);
   }

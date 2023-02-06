@@ -15,11 +15,11 @@ import com.igalia.wolvic.browser.components.WolvicEngineSession
 import com.igalia.wolvic.browser.engine.EngineProvider
 import com.igalia.wolvic.browser.engine.Session
 import com.igalia.wolvic.browser.engine.SessionStore
-import com.igalia.wolvic.crashreporting.GlobalExceptionHandler
 import com.igalia.wolvic.ui.widgets.WidgetManagerDelegate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.future.future
 import mozilla.components.concept.engine.CancellableOperation
 import mozilla.components.concept.engine.webextension.Action
@@ -32,6 +32,7 @@ import mozilla.components.feature.addons.update.DefaultAddonUpdater
 import mozilla.components.feature.addons.update.GlobalAddonDependencyProvider
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.webextensions.WebExtensionSupport
+import mozilla.components.support.webextensions.WebExtensionSupport.installedExtensions
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
@@ -49,16 +50,17 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
     val addonCollectionProvider by lazy {
         if (BuildConfig.AMO_COLLECTION.isNotEmpty()) {
             AddonCollectionProvider(
-                    context,
-                    EngineProvider.getDefaultClient(context),
-                    collectionName = BuildConfig.AMO_COLLECTION,
-                    maxCacheAgeInMinutes = DAY_IN_MINUTES
+                context,
+                EngineProvider.getDefaultClient(context),
+                collectionName = BuildConfig.AMO_COLLECTION,
+                maxCacheAgeInMinutes = DAY_IN_MINUTES
             )
         } else {
             AddonCollectionProvider(
-                    context,
-                    EngineProvider.getDefaultClient(context),
-                    maxCacheAgeInMinutes = DAY_IN_MINUTES)
+                context,
+                EngineProvider.getDefaultClient(context),
+                maxCacheAgeInMinutes = DAY_IN_MINUTES
+            )
         }
     }
 
@@ -69,10 +71,11 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
 
     private val addonManager by lazy {
         AddonManager(
-                ComponentsAdapter.get().store,
-                sessionStore.webExtensionRuntime,
-                addonCollectionProvider,
-                addonUpdater)
+            ComponentsAdapter.get().store,
+            sessionStore.webExtensionRuntime,
+            addonCollectionProvider,
+            addonUpdater
+        )
     }
 
     init {
@@ -82,40 +85,37 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
     private fun initializeWebExtensionSupport() {
         try {
             GlobalAddonDependencyProvider.initialize(
-                    addonManager,
-                    addonUpdater,
-                    onCrash = { exception ->
-                        GlobalExceptionHandler.mInstance.mCrashHandler.uncaughtException(Thread.currentThread(), exception)
-                    }
+                addonManager,
+                addonUpdater,
+                onCrash = { exception ->
+//                        GlobalExceptionHandler.mInstance.mCrashHandler.uncaughtException(Thread.currentThread(), exception)
+                }
             )
             WebExtensionSupport.initialize(
-                    sessionStore.webExtensionRuntime,
-                    ComponentsAdapter.get().store,
-                    false,
-                    onNewTabOverride = {
-                        _, engineSession, url ->
-                        val session = (engineSession as WolvicEngineSession).session
-                        session.loadUri(url, WSession.LOAD_FLAGS_REPLACE_HISTORY)
-                        session.id
-                    },
-                    onCloseTabOverride = {
-                        _, sessionId ->
-                        val session: Session? = sessionStore.getSession(sessionId)
-                        if (session != null) {
-                            delegate.windows.closeTab(session)
-                        }
-                    },
-                    onSelectTabOverride = {
-                        _, sessionId ->
-                        val session: Session? = sessionStore.getSession(sessionId)
-                        if (session != null) {
-                            delegate.windows.selectTab(session)
-                        }
-                    },
-                    onExtensionsLoaded = { extensions ->
-                        addonUpdater.registerForFutureUpdates(extensions)
-                    },
-                    onUpdatePermissionRequest = addonUpdater::onUpdatePermissionRequest
+                sessionStore.webExtensionRuntime,
+                ComponentsAdapter.get().store,
+                false,
+                onNewTabOverride = { _, engineSession, url ->
+                    val session = (engineSession as WolvicEngineSession).session
+                    session.loadUri(url, WSession.LOAD_FLAGS_REPLACE_HISTORY)
+                    session.id
+                },
+                onCloseTabOverride = { _, sessionId ->
+                    val session: Session? = sessionStore.getSession(sessionId)
+                    if (session != null) {
+                        delegate.windows.closeTab(session)
+                    }
+                },
+                onSelectTabOverride = { _, sessionId ->
+                    val session: Session? = sessionStore.getSession(sessionId)
+                    if (session != null) {
+                        delegate.windows.selectTab(session)
+                    }
+                },
+                onExtensionsLoaded = { extensions ->
+                    addonUpdater.registerForFutureUpdates(extensions)
+                },
+                onUpdatePermissionRequest = addonUpdater::onUpdatePermissionRequest
             )
         } catch (e: UnsupportedOperationException) {
             Logger.error("Failed to initialize web extension support", e)
@@ -132,9 +132,11 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         listeners.remove(listener)
     }
 
-    fun installAddon(addon: Addon,
-                     onSuccess: ((Addon) -> Unit) = { },
-                     onError: ((String, Throwable) -> Unit) = { _, _ -> }): CancellableOperation {
+    fun installAddon(
+        addon: Addon,
+        onSuccess: ((Addon) -> Unit) = { },
+        onError: ((String, Throwable) -> Unit) = { _, _ -> }
+    ): CancellableOperation {
         return addonManager.installAddon(addon, { addon1: Addon ->
             onSuccess.invoke(addon1)
             notifyListeners()
@@ -144,9 +146,11 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         })
     }
 
-    fun uninstallAddon(addon: Addon,
-                       onSuccess: (() -> Unit) = { },
-                       onError: ((String, Throwable) -> Unit) = { _, _ -> }) {
+    fun uninstallAddon(
+        addon: Addon,
+        onSuccess: (() -> Unit) = { },
+        onError: ((String, Throwable) -> Unit) = { _, _ -> }
+    ) {
         addonManager.uninstallAddon(addon, {
             onSuccess.invoke()
             notifyListeners()
@@ -156,10 +160,12 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         })
     }
 
-    fun setAddonAllowedInPrivateBrowsing(addon: Addon,
-                                         allowed: Boolean,
-                                         onSuccess: ((Addon) -> Unit) = { },
-                                         onError: ((Throwable) -> Unit) = { }) {
+    fun setAddonAllowedInPrivateBrowsing(
+        addon: Addon,
+        allowed: Boolean,
+        onSuccess: ((Addon) -> Unit) = { },
+        onError: ((Throwable) -> Unit) = { }
+    ) {
         addonManager.setAddonAllowedInPrivateBrowsing(addon, allowed, {
             onSuccess.invoke(it)
             notifyListeners()
@@ -169,11 +175,13 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         })
     }
 
-    fun enableAddon(addon: Addon,
-                    source: EnableSource = EnableSource.USER,
-                    onSuccess: ((Addon) -> Unit) = { },
-                    onError: ((Throwable) -> Unit) = { }) {
-            addonManager.enableAddon(addon, source, {
+    fun enableAddon(
+        addon: Addon,
+        source: EnableSource = EnableSource.USER,
+        onSuccess: ((Addon) -> Unit) = { },
+        onError: ((Throwable) -> Unit) = { }
+    ) {
+        addonManager.enableAddon(addon, source, {
             onSuccess.invoke(it)
             notifyListeners()
 
@@ -182,10 +190,12 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         })
     }
 
-    fun disableAddon(addon: Addon,
-                    source: EnableSource = EnableSource.USER,
-                    onSuccess: ((Addon) -> Unit) = { },
-                    onError: ((Throwable) -> Unit) = { }) {
+    fun disableAddon(
+        addon: Addon,
+        source: EnableSource = EnableSource.USER,
+        onSuccess: ((Addon) -> Unit) = { },
+        onError: ((Throwable) -> Unit) = { }
+    ) {
         addonManager.disableAddon(addon, source, {
             onSuccess.invoke(it)
             notifyListeners()
@@ -195,7 +205,7 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
         })
     }
 
-    private fun notifyListeners() {
+    fun notifyListeners() {
         if (listeners.size > 0) {
             val listenersCopy = ArrayList(listeners)
             Handler(Looper.getMainLooper()).post {
@@ -207,20 +217,48 @@ class Addons(val context: Context, private val sessionStore: SessionStore) {
     }
 
     fun getAddons(waitForPendingActions: Boolean = true): CompletableFuture<List<Addon>> =
-            GlobalScope.future {
-                addonManager.getAddons(waitForPendingActions)
+        GlobalScope.future {
+            val addons = addonManager.getAddons(waitForPendingActions).toMutableList()
+            // Set the correct enabled state and icon for unsupported addons
+            for (i in addons.indices) {
+                if (!addons[i].isSupported()) {
+                    val enabled = installedExtensions[addons[i].id]?.isEnabled() ?: false
+                    val icon = CoroutineScope(Dispatchers.Main).future {
+                        try {
+                            installedExtensions[addons[i].id]?.loadIcon(AddonManager.TEMPORARY_ADDON_ICON_SIZE)
+                        } catch (throwable: Throwable) {
+                            Logger.warn("Failed to load addon icon.", throwable)
+                            null
+                        }
+                    }.await()
+                    addons[i] = addons[i].copy(
+                        installedState = addons[i].installedState?.copy(
+                            enabled = enabled,
+                            icon = icon
+                        )
+                    )
+                }
             }
+            addons.toList()
+        }
 
     companion object {
-        fun loadActionIcon(context: Context, action: Action, height: Int): CompletableFuture<Drawable?> =
-                CoroutineScope(Dispatchers.Main).future {
-                    try {
-                        val bitmap: Bitmap? = action.loadIcon?.invoke(height)
-                        BitmapDrawable(context.resources, bitmap)
-                    } catch (throwable: Throwable) {
-                        Logger.warn("Failed to load browser action icon, falling back to default.", throwable)
-                        AppCompatResources.getDrawable(context, R.drawable.ic_icon_addons)
-                    }
+        fun loadActionIcon(
+            context: Context,
+            action: Action,
+            height: Int
+        ): CompletableFuture<Drawable?> =
+            CoroutineScope(Dispatchers.Main).future {
+                try {
+                    val bitmap: Bitmap? = action.loadIcon?.invoke(height)
+                    BitmapDrawable(context.resources, bitmap)
+                } catch (throwable: Throwable) {
+                    Logger.warn(
+                        "Failed to load browser action icon, falling back to default.",
+                        throwable
+                    )
+                    AppCompatResources.getDrawable(context, R.drawable.ic_icon_addons)
                 }
+            }
     }
 }

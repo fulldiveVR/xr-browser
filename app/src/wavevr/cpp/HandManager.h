@@ -103,11 +103,6 @@ namespace crow {
 
     Matrix4 mJointMats[Hand_MaxNumber][sMaxSupportJointNumbers]; //Store mapping-convert poses.
     Matrix4 mHandPoseMats[Hand_MaxNumber];
-//    Matrix4 mSkeletonPoses[Hand_MaxNumber][sMaxSupportJointNumbers]; //tracking data in model space.
-//    float mSkeletonMatrices[Hand_MaxNumber][16 * sMaxSupportJointNumbers];
-//    Matrix4 mJointInvTransMats[Hand_MaxNumber][sMaxSupportJointNumbers]; // todo
-//    int32_t mJointParentTable[Hand_MaxNumber][sMaxSupportJointNumbers]; // todo
-//    int32_t mJointUsageTable[Hand_MaxNumber][sMaxSupportJointNumbers]; //0 means we don't use it. // todo
 
     bool mIsHandPoseValids[Hand_MaxNumber];
   protected:
