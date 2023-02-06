@@ -28,7 +28,7 @@ object EngineProvider {
             val settingsStore = SettingsStore.getInstance(context)
 
             val policy : TrackingProtectionPolicy = TrackingProtectionStore.getTrackingProtectionPolicy(context);
-            builder.crashHandler(CrashReporterService::class.java)
+//            builder.crashHandler(CrashReporterService::class.java)
             builder.contentBlocking(
                 WContentBlocking.Settings.Builder()
                     .antiTracking(policy.antiTrackingPolicy)
