@@ -80,6 +80,7 @@ android_components.service_accounts = "org.mozilla.components:service-firefox-ac
 android_components.service_sync_logins = "org.mozilla.components:service-sync-logins:$versions.android_components"
 android_components.mozilla_service_location = "org.mozilla.components:service-location:${versions.android_components}"
 android_components.ui_autocomplete = "org.mozilla.components:ui-autocomplete:$versions.android_components"
+android_components.concept_base = "org.mozilla.components:concept-base:$versions.android_components"
 android_components.concept_engine = "org.mozilla.components:concept-engine:$versions.android_components"
 android_components.concept_fetch = "org.mozilla.components:concept-fetch:$versions.android_components"
 android_components.lib_fetch = "org.mozilla.components:lib-fetch-httpurlconnection:$versions.android_components"
