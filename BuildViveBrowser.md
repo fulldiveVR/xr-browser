@@ -17,19 +17,19 @@ Unzip SDK
 unzip ./third_party/wavesdk/wave_5.0.3_native.zip -d ./third_party/wavesdk
 ```
 
-Unpack ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.3-u05/wvr_client-5.0.3-u05.aar into ./third_party/wavesdk/build (change .arr to .zip and use unzip)
+Unpack ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.2.0/wvr_client-5.2.0.aar into ./third_party/wavesdk/build (change .arr to .zip and use unzip)
 
 ```bash
-cp ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.0.3-u05/wvr_client-5.0.3-u05.aar ./third_party/wavesdk/build/wvr_client-5.0.3-u05.zip
-unzip ./third_party/wavesdk/build/wvr_client-5.0.3-u05.zip -d ./third_party/wavesdk/build/wvr_client-5.0.3-u05/
+cp ./third_party/wavesdk/repo/com/htc/vr/wvr_client/5.2.0/wvr_client-5.2.0.aar ./third_party/wavesdk/build/wvr_client-5.2.0.zip
+unzip ./third_party/wavesdk/build/wvr_client-5.2.0.zip -d ./third_party/wavesdk/build/wvr_client-5.2.0/
 ```
 
-Check file `./third_party/wavesdk/build/wvr_client-5.0.3-u05/jni/arm64-v8a/libwvr_api.so` exist
+Check file `./third_party/wavesdk/build/wvr_client-5.2.0/jni/arm64-v8a/libwvr_api.so` exist
 ```bash
-[ ! -f ./third_party/wavesdk/build/wvr_client-5.0.3-u05/jni/arm64-v8a/libwvr_api.so ] && echo ">>> Not found"
+[ ! -f ./third_party/wavesdk/build/wvr_client-5.2.0/jni/arm64-v8a/libwvr_api.so ] && echo ">>> Not found"
 ```
 
-Update `./version.gradle` set `versions.wavevr = "5.0.3-u05"`
+Update `./version.gradle` set `versions.wavevr = "5.2.0"`
 
 Download VBR repo into ./app/src/main/cpp/vrb
 

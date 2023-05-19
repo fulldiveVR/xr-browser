@@ -626,13 +626,13 @@ if(true) {
 //if (findProject(':wavesdk')) {
     dependencies {
 
-        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/common/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
+        wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
         wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/vr.client.abi/${versions.wavevr}/vr.client.abi-${versions.wavevr}.aar")
         wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr_client/${versions.wavevr}/wvr_client-${versions.wavevr}.aar")
         wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr_ime_client/${versions.wavevr}/wvr_ime_client-${versions.wavevr}.aar")
         wavevrImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr_permission_client/${versions.wavevr}/wvr_permission_client-${versions.wavevr}.aar")
 
-        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/common/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
+        wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr.common.utils/${versions.wavevr}/wvr.common.utils-${versions.wavevr}.aar")
         wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/vr.client.abi/${versions.wavevr}/vr.client.abi-${versions.wavevr}.aar")
         wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr_client/${versions.wavevr}/wvr_client-${versions.wavevr}.aar")
         wavevrStoreImplementation files("${project.rootDir}/third_party/wavesdk/repo/com/htc/vr/wvr_ime_client/${versions.wavevr}/wvr_ime_client-${versions.wavevr}.aar")
