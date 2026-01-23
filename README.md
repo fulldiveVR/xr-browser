@@ -2,6 +2,16 @@
 
 The goal of the Wolvic project is to create a full-featured browser exclusively for *standalone* AR and VR headsets.
 
+## 🥽 Community & Support
+
+Join our Discord for VR support and discussions!
+
+**[Join FullDive Discord →](https://discord.gg/FV3ucz5M2S)** - Get help in `🥽 vr-support`
+
+- 🐛 **Report bugs**: [GitHub Issues](https://github.com/fulldiveVR/xr-browser/issues)
+- 🥽 **VR troubleshooting** and setup help
+
+
 You can find us in [wolvic.com](https://www.wolvic.com), Twitter [@wolvicxr](https://twitter.com/wolvicxr), and at [info@wolvic.com](mailto:info@wolvic.com).
 
 Want to learn more about Wolvic? Read our [FAQ](https://wolvic.com/en/faq)!
