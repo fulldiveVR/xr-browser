@@ -517,37 +517,41 @@ void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode,
         return;
     }
 
-    delegate.SetEnabled(mIndex, true);
-    delegate.SetModelVisible(mIndex, false);
-
     XrSpaceLocation poseLocation { XR_TYPE_SPACE_LOCATION };
     poseLocation.pose = mAimState.aimPose;
 
+    delegate.SetEnabled(mIndex, true);
+
+    device::CapabilityFlags flags = device::Orientation;
     vrb::Matrix pointerTransform = XrPoseToMatrix(poseLocation.pose);
-    if (renderMode == device::RenderMode::StandAlone)
+
+    if (renderMode == device::RenderMode::StandAlone) {
         pointerTransform.TranslateInPlace(kAverageHeight);
+    }
+    flags |= device::Position;
 
-    // On Quest devices, hand pose returned by XR_FB_hand_tracking_aim appears rotated
-    // on the Z-axis relative to the corresponding pose of the controllers, and the
-    // rotation is different for each hand. So here correct the pose by an angle that
-    // was obtained empirically for each hand.
-    float correctionAngle = (mHandeness == OpenXRHandFlags::Left) ? M_PI_2 : M_PI_4 * 3/2;
-    auto correctionMatrix = vrb::Matrix::Rotation(vrb::Vector(0.0, 0.0, 1.0),
-                                                  correctionAngle);
+    float correctionAngle;
+    if (mHandeness == OpenXRHandFlags::Left)
+        correctionAngle = M_PI_2;
+    else
+        correctionAngle = M_PI_4 * 3/2;
+    auto correctionMatrix = vrb::Matrix::Rotation(vrb::Vector(0.0, 0.0, 1.0), correctionAngle);
+
     vrb::Matrix correctedTransform = pointerTransform.PostMultiply(correctionMatrix);
-
     delegate.SetTransform(mIndex, correctedTransform);
+
     delegate.SetImmersiveBeamTransform(mIndex, correctedTransform);
+    flags |= device::GripSpacePosition;
     delegate.SetBeamTransform(mIndex, vrb::Matrix::Identity());
 
-    device::CapabilityFlags flags = device::Orientation | device::Position | device::GripSpacePosition;
     delegate.SetCapabilityFlags(mIndex, flags);
+
+    delegate.SetModelVisible(mIndex, false);
 
     // Select action
     bool indexPinching = (mAimState.status & XR_HAND_TRACKING_AIM_INDEX_PINCHING_BIT_FB) != 0;
     delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_TRIGGER,
-                            device::kImmersiveButtonTrigger, indexPinching,
-                            indexPinching, 1.0);
+                            device::kImmersiveButtonTrigger, indexPinching, indexPinching, 1.0);
 
     if (renderMode == device::RenderMode::Immersive && indexPinching != selectActionStarted) {
         selectActionStarted = indexPinching;
@@ -561,8 +565,7 @@ void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode,
     // Squeeze action
     bool middlePinching = (mAimState.status & XR_HAND_TRACKING_AIM_MIDDLE_PINCHING_BIT_FB) != 0;
     delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_SQUEEZE,
-                            device::kImmersiveButtonSqueeze, middlePinching,
-                            middlePinching, 1.0);
+                            device::kImmersiveButtonSqueeze, middlePinching, middlePinching, 1.0);
 
     if (renderMode == device::RenderMode::Immersive && middlePinching != squeezeActionStarted) {
         squeezeActionStarted = middlePinching;
@@ -575,8 +578,9 @@ void OpenXRInputSource::EmulateControllerFromHand(device::RenderMode renderMode,
 
     // Menu button
     bool ringPinching = (mAimState.status & XR_HAND_TRACKING_AIM_RING_PINCHING_BIT_FB) != 0;
-    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_APP, -1, ringPinching,
-                            ringPinching, 1.0);
+    delegate.SetButtonState(mIndex, ControllerDelegate::BUTTON_APP,
+                            device::kImmersiveButtonThumbrest, ringPinching, ringPinching, 1.0);
+
 }
 
 void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, float offsetY, device::RenderMode renderMode, ControllerDelegate& delegate)
@@ -756,23 +760,35 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
     UpdateHaptics(delegate);
 }
 
-XrResult OpenXRInputSource::UpdateInteractionProfile(ControllerDelegate& delegate)
+XrResult OpenXRInputSource::UpdateInteractionProfile(ControllerDelegate& delegate, const char *emulateProfile)
 {
-    XrInteractionProfileState state { XR_TYPE_INTERACTION_PROFILE_STATE };
-    RETURN_IF_XR_FAILED(xrGetCurrentInteractionProfile(mSession, mSubactionPath, &state));
-    if (state.interactionProfile == XR_NULL_PATH) {
-      return XR_SUCCESS; // Not ready yet
-    }
+    const char *path = nullptr;
+    size_t path_len = 0;
 
-    constexpr uint32_t bufferSize = 100;
-    char buffer[bufferSize];
-    uint32_t writtenCount = 0;
-    RETURN_IF_XR_FAILED(xrPathToString(mInstance, state.interactionProfile, bufferSize, &writtenCount, buffer));
+    if (emulateProfile == nullptr) {
+        XrInteractionProfileState state{XR_TYPE_INTERACTION_PROFILE_STATE};
+        RETURN_IF_XR_FAILED(xrGetCurrentInteractionProfile(mSession, mSubactionPath, &state));
+        if (state.interactionProfile == XR_NULL_PATH) {
+            return XR_SUCCESS; // Not ready yet
+        }
+
+        constexpr uint32_t bufferSize = 100;
+        char buffer[bufferSize];
+        uint32_t writtenCount = 0;
+        RETURN_IF_XR_FAILED(
+                xrPathToString(mInstance, state.interactionProfile, bufferSize, &writtenCount,
+                               buffer));
+        path = buffer;
+        path_len = writtenCount;
+    } else {
+        path = emulateProfile;
+        path_len = strlen(emulateProfile);
+    }
 
     mActiveMapping = nullptr;
 
     for (auto& mapping : mMappings) {
-        if (!strncmp(mapping.path, buffer, writtenCount)) {
+        if (!strncmp(mapping.path, path, path_len)) {
             mActiveMapping = &mapping;
             break;
         }

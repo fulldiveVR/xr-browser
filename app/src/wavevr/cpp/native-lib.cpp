@@ -19,6 +19,7 @@
 #include "vrb/Logger.h"
 #include "vrb/GLError.h"
 #include "vrb/RunnableQueue.h"
+#include "Context.h"
 
 using namespace crow;
 
@@ -114,12 +115,14 @@ JNI_METHOD(void, initializeJava)
 }
 
 jint JNI_OnLoad(JavaVM* aVm, void*) {
+  Context *ctx = new Context(aVm);
   sQueue = vrb::RunnableQueue::Create(aVm);
   WVR_RegisterMain(main);
   return JNI_VERSION_1_6;
 }
 
 void JNI_OnUnload(JavaVM* vm, void* reserved) {
+  delete Context::getInstance();
   sQueue = nullptr;
 }
 

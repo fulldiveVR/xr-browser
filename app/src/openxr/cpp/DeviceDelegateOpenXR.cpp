@@ -38,6 +38,7 @@
 #include "OpenXRHelpers.h"
 #include "OpenXRSwapChain.h"
 #include "OpenXRInput.h"
+#include "OpenXRInputMappings.h"
 #include "OpenXRExtensions.h"
 #include "OpenXRLayers.h"
 
@@ -97,25 +98,6 @@ struct DeviceDelegateOpenXR::State {
   std::function<void()> controllersReadyCallback;
   std::optional<XrPosef> firstPose;
   bool mHandTrackingSupported = false;
-
-  bool IsPositionTrackingSupported() {
-      CHECK(system != XR_NULL_SYSTEM_ID);
-      CHECK(instance != XR_NULL_HANDLE);
-      return systemProperties.trackingProperties.positionTracking == XR_TRUE;
-  }
-
-  // This might require more sophisticated code to properly detect specific hardware. That was
-  // easy to do with propietary SDKs but it's a bit more difficult with OpenXR.
-  void InitializeDeviceType() {
-      VRB_LOG("Initializing device %s from vendor %d", systemProperties.systemName, systemProperties.vendorId);
-#if OCULUSVR
-      deviceType = device::OculusQuest2;
-#elif HVR
-      deviceType = IsPositionTrackingSupported() ? device::HVR6DoF : device::HVR3DoF;
-#elif PICOXR
-      deviceType = device::PicoXR;
-#endif
-  }
 
   void Initialize() {
 #ifdef PICOXR
@@ -207,7 +189,7 @@ struct DeviceDelegateOpenXR::State {
     CHECK_MSG(system != XR_NULL_SYSTEM_ID, "Failed to initialize XRSystem");
 
     // If hand tracking extension is present, query whether the runtime actually supports it
-    XrSystemHandTrackingPropertiesEXT handTrackingProperties{XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT};
+    XrSystemHandTrackingPropertiesEXT handTrackingProperties{XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT };
     handTrackingProperties.supportsHandTracking = XR_FALSE;
     if (OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
         handTrackingProperties.next = systemProperties.next;
@@ -220,8 +202,6 @@ struct DeviceDelegateOpenXR::State {
 
     mHandTrackingSupported = handTrackingProperties.supportsHandTracking;
     VRB_LOG("OpenXR runtime %s hand tracking", mHandTrackingSupported ? "does support" : "doesn't support");
-
-    InitializeDeviceType();
   }
 
   // xrGet*GraphicsRequirementsKHR check must be called prior to xrCreateSession
@@ -450,6 +430,14 @@ struct DeviceDelegateOpenXR::State {
       sessionBeginInfo.primaryViewConfigurationType = viewConfigType;
       CHECK_XRCMD(xrBeginSession(session, &sessionBeginInfo));
       vrReady = true;
+
+      if (mHandTrackingSupported && input) {
+        input->UpdateInteractionProfile(*controller, OculusTouch.path);
+        if (controllersReadyCallback && input->AreControllersReady()) {
+           controllersReadyCallback();
+           controllersReadyCallback = nullptr;
+        }
+      }
     }
 
   void HandleSessionEvent(const XrEventDataSessionStateChanged& event) {
@@ -651,7 +639,7 @@ DeviceDelegateOpenXR::GetControllerModelName(const int32_t aModelIndex) const {
 bool
 DeviceDelegateOpenXR::IsPositionTrackingSupported() const {
   // returns true for 6DoF controllers
-  return m.IsPositionTrackingSupported();
+    return m.systemProperties.trackingProperties.positionTracking == XR_TRUE;
 }
 
 void
@@ -693,7 +681,7 @@ DeviceDelegateOpenXR::ProcessEvents() {
       }
       case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
         if (m.input) {
-          m.input->UpdateInteractionProfile(*m.controller);
+          m.input->UpdateInteractionProfile(*m.controller, nullptr);
           if (m.controllersReadyCallback && m.input->AreControllersReady()) {
             m.controllersReadyCallback();
             m.controllersReadyCallback = nullptr;
